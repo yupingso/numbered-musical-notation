@@ -262,90 +262,6 @@ class Song:
                 nodes += [Node('.') for _ in range(note.dot)]
         return sections
 
-    def _construct_display_nodes(self):
-        """Return sections."""
-        note_count = 0
-        node_sections = []
-        lyrics = ''.join(self.lyrics)
-        word_count = len(lyrics)
-        for section in self.sections:
-            # new section starts in new page
-            nodes = []
-            prev_idx = -1
-            prev_tie = False
-            #tie_idx = set()
-            for i, (time, first_bar_duration, melody) in \
-                    enumerate(zip(*section[1:])):
-                if time[1] == 4:
-                    bar_duration = Fraction(time[0])
-                elif time[1] == 8:
-                    bar_duration = Fraction(time[0], 2)
-                else:
-                    raise ValueError("unknown time {}/{}".format(time[0], time[1]))
-                beat = bar_duration - first_bar_duration
-                for note in melody:
-                    # note
-                    idx = len(nodes)
-                    node = Node(note)
-                    beat += note.duration
-                    if (note.tie[0] or prev_tie) and prev_idx >= 0:
-                        #tie_idx.add((prev_idx, idx))
-                        nodes[prev_idx].tie = 1
-                        node.tie = -1
-                    else:
-                        if note_count > word_count:
-                            raise ValueError("#notes > {} words".format(note_count, word_count))
-                        if lyrics[note_count] != '-':
-                            node.text = lyrics[note_count]
-                        note_count += 1
-                    nodes.append(node)
-                    prev_tie = note.tie[1]
-                    prev_idx = idx
-                    # dash
-                    nodes += [Node('-') for _ in range(note.line)]
-                    # dot
-                    nodes += [Node('.') for _ in range(note.dot)]
-                    # bar
-                    if beat % bar_duration == Fraction(0):
-                        nodes.append(Node('|'))
-                        beat = Fraction(0)
-            node_sections.append((section[0], nodes))
-        if word_count != note_count:
-            raise ValueError("{} notes != {} words".format(note_count, word_count))
-        return node_sections
-
-    def _split_lines(self, node_sections):
-        """Split nodes into lines according to the lyrics.
-        Trailing bars are removed.
-        """
-        line_sections = []
-        for i, (tag, nodes) in enumerate(node_sections):
-            num = 0
-            split_idx = [0]     # start index of each line
-            for s in self.lyrics[:-1]:
-                s = s.replace('-', '')
-                num += len(s)
-                split_idx.append(num)
-            lines = []
-            idx = 0
-            for node in nodes:
-                if node.text:
-                    if idx in split_idx:
-                        lines.append([])
-                    idx += 1
-                lines[-1].append(node)
-            for j, line in enumerate(lines):
-                if line and line[-1].name == '|':
-                    line.pop()
-                if j % 2 == 0:
-                    c = 'a'
-                else:
-                    c = 'b'
-                for k, node in enumerate(line):
-                    node.id = "n{}{}-{}{:02d}".format(chr(ord('a') + i), j // 2, c, k)
-            line_sections.append((tag, lines))
-        return line_sections
-
     def _group_underlines(self, line_sections):
         """Group underlines shared by contiguous notes."""
         for tag, lines in line_sections:
@@ -383,15 +299,6 @@ class Song:
                         print("    {}".format(nodes[idx]))
                 print("<ties> ".format(ties))
         return  # TODO
-        node_sections = self._construct_display_nodes()
-        line_sections = self._split_lines(node_sections)
-        self._group_underlines(line_sections)
-        for tag, lines in line_sections:
-            print("{:=^80}".format(' ' + tag + ' '))
-            for line in lines:
-                print("-" * 50)
-                for i, node in enumerate(line):
-                    print("<{}> {}".format(node.id, node))
 
 
 def parse_key(s):
