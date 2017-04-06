@@ -296,6 +296,7 @@ class Song:
                     bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
                     beat = time_duration - bar_duration
                     assert beat >= 0
+                    idx_prev = -9
                     for idx in idx_list:
                         node = nodes[idx]
                         note = node.value
@@ -304,12 +305,16 @@ class Song:
                         level = -note.line        # number of underlines
                         for _ in range(level - len(underlines_list) + 1):
                             underlines_list.append([])
+                        # TODO: denominator if time[1]==8
                         for k in range(1, level + 1):
                             if beat.denominator == 1 or not underlines_list[k]:
                                 underlines_list[k].append([idx, idx])
-                            elif underlines_list[k][-1][1] == idx - 1:
+                            elif underlines_list[k][-1][1] == idx_prev:
                                 underlines_list[k][-1][1] = idx
+                            else:
+                                underlines_list[k].append([idx, idx])
                         beat += note.duration
+                        idx_prev = idx
                 line.append(underlines_list)
 
     def to_tex_tikzpicture(self, filename=None):
@@ -327,7 +332,7 @@ class Song:
                 for time, a in bars:
                     print("<time> {}/{}".format(time[0], time[1]))
                     for idx in a:
-                        print("    {}".format(nodes[idx]))
+                        print("    <node {:02d}> {}".format(idx, nodes[idx]))
                 print("<ties> {}".format(ties))
                 print("<underlines>")
                 for k, underlines in enumerate(underlines_list):
