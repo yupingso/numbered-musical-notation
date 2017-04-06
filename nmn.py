@@ -5,13 +5,23 @@ from fractions import Fraction
 
 
 class Note:
-    def __init__(self, acc, name, octave=0, duration=1, dash=0, underline=0, dot=0, tie=(False, False)):
-        """Arguments:
-        acc: None, 1(sharp), -1(flat), 0(natural)
-        name: 0-7
-        octave: int
-        duration: Fraction
-        """
+    """Member variables
+
+    acc: accidental
+        None, -1 (flat), 1 (sharp), 0 (natural)
+    name: 0-7 as in numbered musical notation
+    octave: int
+    duration: Fraction
+    line: # dash or underline
+        line = 0: duration = 1
+        line < 0: duration = 2 ** line
+        line > 0: dash = line
+    dot: # dots
+    tie: 2-tuple of bool
+        tie[0] = True: tied with the previous Note
+        tie[1] = True: tied with the next Note
+    """
+    def __init__(self, acc, name, octave=0, duration=Fraction(1), dash=0, underline=0, dot=0, tie=(False, False)):
         self.acc = acc
         self.name = name
         self.octave = octave
@@ -31,6 +41,34 @@ class Note:
 
     def __repr__(self):
         return "'{}'".format(self.__str__())
+
+
+NOTE_NODE = 0
+DASH_NODE = 1
+DOT_NODE = 2
+
+
+class Node:
+    def __init__(self, note):
+        if isinstance(note, Note):
+            self.type = NOTE_NODE
+        elif note == '-':
+            self.type = DASH_NODE
+        elif note == '.':
+            self.type = DOT_NODE
+        else:
+            raise ValueError("unknown node type {}".format(note))
+        self.value = note
+        self.text = None
+
+    def __str__(self):
+        if self.type == NOTE_NODE:
+            if self.value.tie[1]:
+                return "{} {} ~".format(self.value, self.text)
+            else:
+                return "{} {}".format(self.value, self.text)
+        else:
+            return " {}".format(self.value)
 
 
 def parse_pitch(key, s):
@@ -59,6 +97,7 @@ def parse_pitch(key, s):
 
 class Song:
     """Member variables
+    
     key: (name, accidental, 8-tuple)
         tuple[i] indicates whether i is flat or sharp.
         For example, key = (2,  0, (?, 1,  0,  0,  1,  0,  0,  0)) stands for D major.
@@ -165,8 +204,8 @@ class Song:
         """Return sections, a list of sections.
         
         section: (tag, lines)
-        line: (notes, list of bars, ties)
-        bar: (time, note indices)
+        line: (nodes, list of bars, ties)
+        bar: (time, node indices)
         """
         # calculate split indices according to self.lyrics
         sum_len = 0
@@ -183,11 +222,13 @@ class Song:
         # split melody
         note_idx = 0
         line_note_idx = 0
+        line_node_idx = 0
+        line_node_idx_prev = -1
         prev_tie = False
         sections = []
         for time, notes in self.melody:
             for k, note in enumerate(notes):
-                note_tied = (note.tie[0] or prev_tie) and (line_note_idx > 0)
+                note_tied = (note.tie[0] or prev_tie) and (line_node_idx > 0)
                 if not note_tied and note_idx >= num_words:
                     raise ValueError("#notes > {} words".format(num_words))
                 # new section
@@ -196,49 +237,48 @@ class Song:
                     sections.append((tag, []))
                 # new line
                 if not note_tied and note_idx in split_lines:
-                    sections[-1][1].append(([], [], []))    # (note_list, bars, ties)
+                    sections[-1][1].append(([], [], []))    # (nodes, bars, ties)
                     line_note_idx = 0
+                    line_node_idx_prev = -1
                     prev_tie = False
                 line = sections[-1][1][-1]
-                note_list, bars, ties = line
+                nodes, bars, ties = line
                 # new bar
                 if k == 0 or not bars:
                     bars.append((time, []))
-                # append note
-                bars[-1][1].append(line_note_idx)
+                # append note Node
+                node = Node(note)
+                line_node_idx = len(nodes)
+                bars[-1][1].append(line_node_idx)
                 if note_tied:
-                    ties.append((line_note_idx - 1, line_note_idx))
+                    ties.append((line_node_idx_prev, line_node_idx))
                     note.tie[0] = True
-                    note_list[-1].tie[1] = True
+                    nodes[line_node_idx_prev].value.tie[1] = True
                 else:
                     if all_lyrics[note_idx] != '-':
-                        note.text = all_lyrics[note_idx]
-                    #print(note, note_idx)
+                        node.text = all_lyrics[note_idx]
                     note_idx += 1
                     line_note_idx += 1
-                note_list.append(note)
+                nodes.append(node)
                 prev_tie = note.tie[1]
+                line_node_idx_prev = line_node_idx
+                # append dash Node's
+                for _ in range(note.line):
+                    bars[-1][1].append(len(nodes))
+                    nodes.append(Node('-'))
+                # append dot Node's
+                for _ in range(note.dot):
+                    bars[-1][1].append(len(nodes))
+                    nodes.append(Node('.'))
         return sections
-
-    def _group_underlines(self, line_sections):
+    
+    def _group_underlines(self, sections):
         """Group underlines shared by contiguous notes."""
-        for tag, lines in line_sections:
-            for line in lines:
-                s = Fraction(0)
-                beat = Fraction(0)
-                # TODO: need time information
-                underlines = [None, [], [], [], []] # assuming max 4 underlines
-                for k, node in enumerate(line):
-                    if node.name == '|':
-                        # bar_nodes
-                        ###############################
-                        bar_nodes = []
-                    elif node.name == ['-', '.']:
-                        pass
-                    else:
-                        for n in range(1, -node.line + 1):
-                            pass
-                        s += node.duration
+        for tag, lines in sections:
+            for notes, bars, ties in lines:
+                count = 0                   # number of nodes, including dashes and dots
+                for time, idx_list in bars:
+                    pass
 
     def to_tex_tikzpicture(self, filename=None):
         """Write environment tikzpicture source code to file if provided;
@@ -247,16 +287,15 @@ class Song:
         sections = self.merge_melody_lyrics()
         for tag, lines in sections:
             print("{:=^80}".format(' ' + tag + ' '))
-            for nodes, bars, ties in lines:
+            for notes, bars, ties in lines:
                 print("-" * 50)
-                for k, node in enumerate(nodes):
-                    print("<node {:02d}> {}".format(k, node))
+                #for k, note in enumerate(notes):
+                #    print("<note {:02d}> {}".format(k, note))
                 for time, a in bars:
                     print("<time> {}/{}".format(time[0], time[1]))
                     for idx in a:
-                        print("    {}".format(nodes[idx]))
+                        print("    {}".format(notes[idx]))
                 print("<ties> {}".format(ties))
-        return  # TODO
 
 
 def parse_key(s):
