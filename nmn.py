@@ -204,8 +204,9 @@ class Song:
         """Return sections, a list of sections.
         
         section: (tag, lines)
-        line: (nodes, list of bars, ties)
+        line: [nodes, list of bars, list of ties]
         bar: (time, node indices)
+        tie: (node_idx1, node_idx2)
         """
         # calculate split indices according to self.lyrics
         sum_len = 0
@@ -237,7 +238,7 @@ class Song:
                     sections.append((tag, []))
                 # new line
                 if not note_tied and note_idx in split_lines:
-                    sections[-1][1].append(([], [], []))    # (nodes, bars, ties)
+                    sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
                     line_note_idx = 0
                     line_node_idx_prev = -1
                     prev_tie = False
@@ -272,30 +273,66 @@ class Song:
                     nodes.append(Node('.'))
         return sections
     
-    def _group_underlines(self, sections):
-        """Group underlines shared by contiguous notes."""
+    def group_underlines(self, sections):
+        """Group underlines shared by contiguous notes by modifying sections in place.
+        
+        section: (tag, lines)
+        line: [nodes, list of bars, list of ties, level_underlines_list]
+        bar: (time, node indices)
+        tie: (node_idx1, node_idx2)
+        level_underlines_list: list of level_underlines
+            level_underlines[k]: list of underlines in level k
+            underline: [node_idx1, node_idx2]
+        """
         for tag, lines in sections:
-            for notes, bars, ties in lines:
-                count = 0                   # number of nodes, including dashes and dots
+            for line in lines:
+                nodes, bars, ties = line
+                underlines_list = [None]
                 for time, idx_list in bars:
-                    pass
+                    if time[1] == 4:
+                        time_duration = Fraction(time[0])
+                    else:
+                        time_duration = Fraction(time[0], 2)
+                    bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
+                    beat = time_duration - bar_duration
+                    assert beat >= 0
+                    for idx in idx_list:
+                        node = nodes[idx]
+                        note = node.value
+                        if node.type != NOTE_NODE or note.line >= 0:
+                            continue
+                        level = -note.line        # number of underlines
+                        for _ in range(level - len(underlines_list) + 1):
+                            underlines_list.append([])
+                        for k in range(1, level + 1):
+                            if beat.denominator == 1 or not underlines_list[k]:
+                                underlines_list[k].append([idx, idx])
+                            elif underlines_list[k][-1][1] == idx - 1:
+                                underlines_list[k][-1][1] = idx
+                        beat += note.duration
+                line.append(underlines_list)
 
     def to_tex_tikzpicture(self, filename=None):
         """Write environment tikzpicture source code to file if provided;
         otherwise write to stdout.
         """
         sections = self.merge_melody_lyrics()
+        self.group_underlines(sections)
         for tag, lines in sections:
             print("{:=^80}".format(' ' + tag + ' '))
-            for notes, bars, ties in lines:
+            for nodes, bars, ties, underlines_list in lines:
                 print("-" * 50)
                 #for k, note in enumerate(notes):
                 #    print("<note {:02d}> {}".format(k, note))
                 for time, a in bars:
                     print("<time> {}/{}".format(time[0], time[1]))
                     for idx in a:
-                        print("    {}".format(notes[idx]))
+                        print("    {}".format(nodes[idx]))
                 print("<ties> {}".format(ties))
+                print("<underlines>")
+                for k, underlines in enumerate(underlines_list):
+                    if k >= 1:
+                        print("    level {}: {}".format(k, underlines))
 
 
 def parse_key(s):
