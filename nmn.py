@@ -82,14 +82,14 @@ def parse_pitch(key, s):
     else:
         name = key_dict[name.upper()]   # fixed
         if acc is not None:
-            acc -= key[2][name]    # relative to key
+            acc -= key[2][name]         # relative to key
         if key[0] <= 3:                 # <= E major
             if name < key[0]:
                 octave -= 1
         else:                           # >= F major
-            if name <= key[0]:
+            if name >= key[0]:
                 octave += 1
-        name = (name - key[0]) % 7 + 1 # movable
+        name = (name - key[0]) % 7 + 1  # movable
     if not name:
         acc, octave = 0, 0
     return acc, name, octave
@@ -307,6 +307,9 @@ class Song:
                             underlines_list.append([])
                         # TODO: denominator if time[1]==8
                         for k in range(1, level + 1):
+                            if (time[1] == 4 and beat % Fraction(1) == 0) or \
+                                    (time[1] == 8 and beat % Fraction(3, 2) == 0):
+                                underlines_list[k].append([idx, idx])
                             if beat.denominator == 1 or not underlines_list[k]:
                                 underlines_list[k].append([idx, idx])
                             elif underlines_list[k][-1][1] == idx_prev:
