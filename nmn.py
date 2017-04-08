@@ -346,6 +346,98 @@ class Song:
         sections = self.merge_melody_lyrics()
         self.group_underlines(sections)
         for tag, lines in sections:
+            # new section
+            print("%" * 50)
+            print(r"\newpage")
+            print(r"\begin{nmntag}")
+            print(r"\textmd{$<$\hspace{-0pt}" + tag + r"\hspace{-0pt}$>$}")
+            print(r"\end{nmntag}")
+            for j, (nodes, bars, ties, underlines_list, triplets) in enumerate(lines):
+                # new line
+                print(r"")
+                print("\n")
+                print(r"\begin{nmnline}")
+                print(r"\begin{tikzpicture}")
+                print(r"""\tikzstyle{every node}=[inner sep=0pt]
+\tikzstyle{dot}=[circle,fill=white,inner sep=0pt,text width=1.5pt]
+\tikzstyle{lyrics}=[node distance=15pt]
+\tikzstyle{tie}=[line width=0.5pt,bend left=45,max distance=10pt]
+\tikzstyle{underline}=[line width=0.5pt]
+\tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
+\tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
+                print("\n\n% nodes")
+                pos = 0
+                for k, (time, idx_list) in enumerate(bars):
+                    # new bar
+                    if k > 0:
+                        pos -= 2.5
+                        print(r"\node at ({}pt,0) {{|}};".format(pos))
+                        pos += 7.5
+                    for idx in idx_list:
+                        node = nodes[idx]
+                        note = node.value
+                        print()
+                        if node.type != NOTE_NODE:
+                            pos -= 2.5
+                            if node.type == DASH_NODE:
+                                print(r"\node at ({}pt,-1pt) {{-}};".format(pos))
+                            elif node.type == DOT_NODE:
+                                print(r"\node[dot] at ({}pt,0) {{}};".format(pos))
+                            pos += 7.5
+                            continue
+                        # name
+                        print(r"\node (a{}) at ({}pt,0) {{{}}};".format(idx, pos, note.name))
+                        # acc
+                        acc_dict = {-1: "flat", 0: "natural", 1: "sharp"}
+                        if note.acc is not None:
+                            print(r"\node at ($(a{}.north west)+(-1pt,0)$){{\tiny$\{}$}};" \
+                                    .format(idx, acc_dict[note.acc]))
+                        # octave
+                        if note.octave > 0:
+                            print(r"\node[dot,above of=a{},node distance=7pt] {{}};".format(idx))
+                        elif note.octave < 0:
+                            node_distance = 7
+                            if note.line <= -3:
+                                node_distance = 10
+                            elif note.line == -2:
+                                node_distance = 9
+                            elif note.line == -1:
+                                node_distance = 8
+                            print(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
+                                    .format(idx, node_distance))
+                        # text
+                        if node.text:
+                            if idx == 0:
+                                print(r"\node[lyrics] (t0) at (0,-15pt) {{{}}};".format(node.text))
+                            else:
+                                print(r"\node[lyrics] at (a{} |- t0) {{{}}};".format(idx, node.text))
+                        pos += 10
+
+                print("\n\n% ties")
+                for idx0, idx1 in ties:
+                    print(r"\draw[tie] (a{}.north) ++(0,2pt) coordinate (tmp) to (a{}.north |- tmp);" \
+                            .format(idx0, idx1))
+
+                print("\n\n% underlines")
+                for depth, underlines in enumerate(underlines_list):
+                    if depth == 0:
+                        continue
+                    for idx0, idx1 in underlines:
+                        print(r"\draw[underline] (a{}.south west) ++(0,-1.5pt)".format(idx0) + \
+                              r" coordinate (tmp) to (a{}.south east |- tmp);".format(idx1))
+
+                print("\n\n% triplets")
+                for triplet in triplets:
+                    print(r"\node[above of=a{},node distance=9pt] (tri) {{\tiny{{3}}}};".format(triplet[1]))
+                    print(r"\draw[tie0] (a{}.north) +(0,2pt) to ($(tri.west)+(-1pt,0)$);".format(triplet[0]))
+                    print(r"\draw[tie1] (a{}.north) +(0,2pt) to ($(tri.east)+(+1pt,0)$);".format(triplet[2]))
+                
+                print()
+                print(r"\end{tikzpicture}")
+                print(r"\end{nmnline}")
+
+    def print(self, sections):
+        for tag, lines in sections:
             print("{:=^80}".format(' ' + tag + ' '))
             for nodes, bars, ties, underlines_list, triplets in lines:
                 print("-" * 50)
