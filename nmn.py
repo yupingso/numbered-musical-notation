@@ -303,7 +303,7 @@ class Song:
                     for idx in idx_list:
                         node = nodes[idx]
                         note = node.value
-                        if node.type != NOTE_NODE or note.line >= 0:
+                        if node.type != NOTE_NODE:
                             continue
                         # triplet
                         if (time[1] == 4 and beat % Fraction(1) == 0) or \
@@ -323,18 +323,17 @@ class Song:
                                 triplets[-1].append(idx)
                             triplet_duration = note.duration
                         # underline
-                        if note.line >= 0:
-                            continue
-                        level = -note.line        # number of underlines
-                        for _ in range(level - len(underlines_list) + 1):
-                            underlines_list.append([])
-                        for k in range(1, level + 1):
-                            if new_group or not underlines_list[k]:
-                                underlines_list[k].append([idx, idx])
-                            elif underlines_list[k][-1][1] == idx_prev:
-                                underlines_list[k][-1][1] = idx
-                            else:
-                                underlines_list[k].append([idx, idx])
+                        if note.line < 0:
+                            level = -note.line        # number of underlines
+                            for _ in range(level - len(underlines_list) + 1):
+                                underlines_list.append([])
+                            for k in range(1, level + 1):
+                                if new_group or not underlines_list[k]:
+                                    underlines_list[k].append([idx, idx])
+                                elif underlines_list[k][-1][1] == idx_prev:
+                                    underlines_list[k][-1][1] = idx
+                                else:
+                                    underlines_list[k].append([idx, idx])
                         beat += note.duration
                         idx_prev = idx
                 line.append(underlines_list)
