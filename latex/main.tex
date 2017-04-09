@@ -1,0 +1,73 @@
+\documentclass[10pt,a4paper]{article}
+% Layout
+\usepackage[landscape]{geometry}
+\geometry{paperheight=25.4cm, paperwidth=19.05cm,
+          left=1cm, right=1cm, top=1cm, bottom=1cm}
+\setlength\parindent{0pt}
+
+% Package
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{positioning}
+\usepackage{environ}
+
+% Color
+\usepackage{xcolor}
+\usepackage[nopagecolor=red,pagecolor=black]{pagecolor}
+
+% Symbol
+\usepackage{fdsymbol} % flat, sharp
+\let\mathdollar=\relax
+
+% Font
+\usepackage{fontspec}
+\usepackage{xeCJK}
+%\setCJKmainfont[AutoFakeBold=2,AutoFakeSlant=.4]{標楷體}
+\setCJKmainfont[
+    Path=fonts/,
+    AutoFakeBold=2,
+    AutoFakeSlant=.4
+]{kaiu.ttf}
+\XeTeXlinebreaklocale "zh"
+\XeTeXlinebreakskip = 0pt plus 1pt
+%\setmainfont{Times New Roman}
+\setmainfont[
+    Path = fonts/,
+    BoldFont={timesbd.ttf},
+    ItalicFont={timesi.ttf},
+    BoldItalicFont={timesbi.ttf}
+]{times.ttf}
+\renewcommand{\seriesdefault}{\bfdefault} % bold
+
+% New command
+\NewEnviron{nmntag}{
+\begin{minipage}[t][0.10\textheight][t]{0.95\textwidth}
+\scalebox{4}{
+\BODY
+}
+\end{minipage}
+}
+
+\NewEnviron{nmnblank}{
+\begin{minipage}[t][0.05\textheight][t]{0.95\textwidth}
+\end{minipage}
+}
+
+
+\NewEnviron{nmnline}{
+\begin{minipage}[t][0.43\textheight][t]{0.99\textwidth}
+\scalebox{5.8}{
+\BODY
+}
+\end{minipage}
+}
+
+
+
+\begin{document}
+\pagenumbering{gobble}
+\color{white}
+
+\input{slides}
+
+\end{document}
