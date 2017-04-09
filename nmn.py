@@ -1,5 +1,5 @@
 import sys
-from os.path import isfile
+import os
 import re
 from fractions import Fraction
 
@@ -339,62 +339,81 @@ class Song:
                 line.append(underlines_list)
                 line.append(triplets)
 
-    def to_tex_tikzpicture(self, filename=None):
-        """Write environment tikzpicture source code to file if provided;
-        otherwise write to stdout.
+    def to_tex_tikzpicture(self, output_dir=""):
+        """Write environment tikzpicture source code to file if provided.
         """
+        slides_file = os.path.join(output_dir, "slides.tex")
+        slides_output = []
+        line_file_format = os.path.join(output_dir, "line-{}{:02d}.tex")
+        page_count = 0
+        
         sections = self.merge_melody_lyrics()
         self.group_underlines(sections)
-        for tag, lines in sections:
+        
+        for i, (tag, lines) in enumerate(sections):
             # new section
-            print("%" * 50)
-            print(r"\newpage")
-            print(r"\begin{nmntag}")
-            print(r"\textmd{$<$\hspace{-0pt}" + tag + r"\hspace{-0pt}$>$}")
-            print(r"\end{nmntag}")
+            line_count = 0
+            
             for j, (nodes, bars, ties, underlines_list, triplets) in enumerate(lines):
+                # new page
+                if line_count % 2 == 0:
+                    page_count += 1
+                    if page_count > 1:
+                        slides_output.append("\n")
+                    slides_output.append("%%%%% PAGE {} %%%%%".format(page_count))
+                    slides_output.append(r"\newpage")
+                    slides_output.append("")
+                    if j == 0:      # first page in section
+                        slides_output.append("% <{}>".format(tag))
+                        slides_output.append(r"\begin{nmntag}")
+                        slides_output.append(r"\textmd{$<$\hspace{-0pt}" + tag + r"\hspace{-0pt}$>$}")
+                        slides_output.append(r"\end{nmntag}")
+                    else:
+                        slides_output.append(r"\begin{nmnblank}")
+                        slides_output.append(r"\end{nmnblank}")
+                
                 # new line
-                print(r"")
-                print("\n")
-                print(r"\begin{nmnline}")
-                print(r"\begin{tikzpicture}")
-                print(r"""\tikzstyle{every node}=[inner sep=0pt]
+                line_lyrics = ""
+                line_output = []
+                line_output.append(r"\begin{tikzpicture}")
+                line_output.append(r"""\tikzstyle{every node}=[inner sep=0pt]
 \tikzstyle{dot}=[circle,fill=white,inner sep=0pt,text width=1.5pt]
 \tikzstyle{lyrics}=[node distance=15pt]
 \tikzstyle{tie}=[line width=0.5pt,bend left=45,max distance=10pt]
 \tikzstyle{underline}=[line width=0.5pt]
 \tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
-                print("\n\n% nodes")
+                line_output.append("\n\n% nodes")
+                
                 pos = 0
                 for k, (time, idx_list) in enumerate(bars):
                     # new bar
                     if k > 0:
                         pos -= 2.5
-                        print(r"\node at ({}pt,0) {{|}};".format(pos))
+                        line_output.append(r"\node at ({}pt,0) {{|}};".format(pos))
                         pos += 7.5
                     for idx in idx_list:
                         node = nodes[idx]
                         note = node.value
-                        print()
+                        line_output.append("")
                         if node.type != NOTE_NODE:
                             pos -= 2.5
                             if node.type == DASH_NODE:
-                                print(r"\node at ({}pt,-1pt) {{-}};".format(pos))
+                                line_output.append(r"\node at ({}pt,-1pt) {{-}};".format(pos))
                             elif node.type == DOT_NODE:
-                                print(r"\node[dot] at ({}pt,0) {{}};".format(pos))
+                                line_output.append(r"\node[dot] at ({}pt,0) {{}};".format(pos))
                             pos += 7.5
                             continue
                         # name
-                        print(r"\node (a{}) at ({}pt,0) {{{}}};".format(idx, pos, note.name))
+                        line_output.append(r"\node (a{}) at ({}pt,0) {{{}}};".format(idx, pos, note.name))
                         # acc
                         acc_dict = {-1: "flat", 0: "natural", 1: "sharp"}
                         if note.acc is not None:
-                            print(r"\node at ($(a{}.north west)+(-1pt,0)$){{\tiny$\{}$}};" \
+                            line_output.append(r"\node at ($(a{}.north west)+(-1pt,0)$){{\tiny$\{}$}};" \
                                     .format(idx, acc_dict[note.acc]))
                         # octave
                         if note.octave > 0:
-                            print(r"\node[dot,above of=a{},node distance=7pt] {{}};".format(idx))
+                            line_output.append(r"\node[dot,above of=a{},node distance=7pt] {{}};".format(idx))
                         elif note.octave < 0:
                             node_distance = 7
                             if note.line <= -3:
@@ -403,38 +422,56 @@ class Song:
                                 node_distance = 9
                             elif note.line == -1:
                                 node_distance = 8
-                            print(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
+                            line_output.append(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
                                     .format(idx, node_distance))
                         # text
                         if node.text:
                             if idx == 0:
-                                print(r"\node[lyrics] (t0) at (0,-15pt) {{{}}};".format(node.text))
+                                line_output.append(r"\node[lyrics] (t0) at (0,-15pt) {{{}}};".format(node.text))
                             else:
-                                print(r"\node[lyrics] at (a{} |- t0) {{{}}};".format(idx, node.text))
+                                line_output.append(r"\node[lyrics] at (a{} |- t0) {{{}}};".format(idx, node.text))
+                            line_lyrics += node.text
                         pos += 10
 
-                print("\n\n% ties")
+                # ties
+                line_output.append("\n\n% ties")
                 for idx0, idx1 in ties:
-                    print(r"\draw[tie] (a{}.north) ++(0,2pt) coordinate (tmp) to (a{}.north |- tmp);" \
+                    line_output.append(r"\draw[tie] (a{}.north) ++(0,2pt) coordinate (tmp) to (a{}.north |- tmp);" \
                             .format(idx0, idx1))
 
-                print("\n\n% underlines")
+                # underlines
+                line_output.append("\n\n% underlines")
                 for depth, underlines in enumerate(underlines_list):
                     if depth == 0:
                         continue
                     for idx0, idx1 in underlines:
-                        print(r"\draw[underline] (a{}.south west) ++(0,-1.5pt)".format(idx0) + \
-                              r" coordinate (tmp) to (a{}.south east |- tmp);".format(idx1))
+                        line_output.append(
+                                r"\draw[underline] (a{}.south west) ++(0,-1.5pt)".format(idx0) + \
+                                r" coordinate (tmp) to (a{}.south east |- tmp);".format(idx1))
 
-                print("\n\n% triplets")
+                # triplets
+                line_output.append("\n\n% triplets")
                 for triplet in triplets:
-                    print(r"\node[above of=a{},node distance=9pt] (tri) {{\tiny{{3}}}};".format(triplet[1]))
-                    print(r"\draw[tie0] (a{}.north) +(0,2pt) to ($(tri.west)+(-1pt,0)$);".format(triplet[0]))
-                    print(r"\draw[tie1] (a{}.north) +(0,2pt) to ($(tri.east)+(+1pt,0)$);".format(triplet[2]))
+                    line_output.append(r"\node[above of=a{},node distance=9pt] (tri) {{\tiny{{3}}}};".format(triplet[1]))
+                    line_output.append(r"\draw[tie0] (a{}.north) +(0,2pt) to ($(tri.west)+(-1pt,0)$);".format(triplet[0]))
+                    line_output.append(r"\draw[tie1] (a{}.north) +(0,2pt) to ($(tri.east)+(+1pt,0)$);".format(triplet[2]))
                 
-                print()
-                print(r"\end{tikzpicture}")
-                print(r"\end{nmnline}")
+                line_output.append("")
+                line_output.append(r"\end{tikzpicture}")
+                line_output.append("")
+
+                line_file = line_file_format.format(chr(ord('a') + i), j)
+                with open(line_file, "w") as f:
+                    f.write("\n".join(line_output))
+                line_count += 1
+                
+                slides_output.append("\n% {}".format(line_lyrics))
+                slides_output.append(r"\begin{nmnline}")
+                slides_output.append(r"\input{{{}}}".format(line_file.split('/')[-1]))
+                slides_output.append(r"\end{nmnline}")
+        
+        with open(slides_file, "w") as f:
+            f.write("\n".join(slides_output))
 
     def print(self, sections):
         for tag, lines in sections:
