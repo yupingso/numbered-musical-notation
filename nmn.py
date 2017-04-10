@@ -415,7 +415,7 @@ class Song:
                                     .format(idx, acc_dict[note.acc]))
                         # octave
                         if note.octave > 0:
-                            line_output.append(r"\node[dot,above of=a{},node distance=7pt] {{}};".format(idx))
+                            line_output.append(r"\node[dot,above of=a{},node distance=6pt] {{}};".format(idx))
                         elif note.octave < 0:
                             node_distance = 7
                             if note.line <= -3:
@@ -438,8 +438,11 @@ class Song:
                 # ties
                 line_output.append("\n\n% ties")
                 for idx0, idx1 in ties:
-                    line_output.append(r"\draw[tie] (a{}.north) ++(0,2pt) coordinate (tmp) to (a{}.north |- tmp);" \
-                            .format(idx0, idx1))
+                    dis = 2
+                    if nodes[idx0].value.octave >= 1:
+                        dis = 5
+                    line_output.append(r"\draw[tie] (a{}.north) ++(0,{}pt) coordinate (tmp) to (a{}.north |- tmp);" \
+                            .format(idx0, dis, idx1))
 
                 # underlines
                 line_output.append("\n\n% underlines")
