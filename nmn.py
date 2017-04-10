@@ -429,7 +429,7 @@ class Song:
                         # text
                         if node.text:
                             if idx == 0:
-                                line_output.append(r"\node[lyrics] (t0) at (0,-15pt) {{{}}};".format(node.text))
+                                line_output.append(r"\node[lyrics] (t0) at (0,-17pt) {{{}}};".format(node.text))
                             else:
                                 line_output.append(r"\node[lyrics] at (a{} |- t0) {{{}}};".format(idx, node.text))
                             line_lyrics += node.text
