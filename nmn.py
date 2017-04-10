@@ -448,7 +448,7 @@ class Song:
                         continue
                     for idx0, idx1 in underlines:
                         line_output.append(
-                                r"\draw[underline] (a{}.south west) ++(0,-1.5pt)".format(idx0) + \
+                                r"\draw[underline] (a{}.south west) ++(0,-{}pt)".format(idx0, depth * 1.5) + \
                                 r" coordinate (tmp) to (a{}.south east |- tmp);".format(idx1))
 
                 # triplets
@@ -461,6 +461,8 @@ class Song:
                 line_output.append("")
                 line_output.append(r"\end{tikzpicture}")
                 line_output.append("")
+                assert line_output[0] == r"\begin{tikzpicture}" and pos > 0
+                line_output[0] = line_output[0] + "[xscale={}]".format(105 / pos)
 
                 line_file = line_file_format.format(chr(ord('a') + i), j)
                 with open(line_file, "w") as f:
