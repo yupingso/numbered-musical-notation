@@ -83,10 +83,10 @@ def parse_pitch(key, s):
         name = key_dict[name.upper()]   # fixed
         if acc is not None:
             acc -= key[2][name]         # relative to key
-        if key[0] <= 3:                 # <= E major
+        if key[0] <= 4:                 # <= #F major
             if name < key[0]:
                 octave -= 1
-        else:                           # >= F major
+        else:                           # >= G major
             if name >= key[0]:
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
@@ -271,6 +271,8 @@ class Song:
                 for _ in range(note.dot):
                     bars[-1][1].append(len(nodes))
                     nodes.append(Node('.'))
+        if note_idx != num_words:
+            raise ValueError("{} notes != {} words".format(note_idx, num_words))
         return sections
     
     def group_underlines(self, sections):
