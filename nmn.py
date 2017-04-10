@@ -184,7 +184,7 @@ class Song:
                 time_duration = Fraction(time[0])
             else:
                 time_duration = Fraction(time[0], 2)
-            if i == 0 and len(bar) > 1:     # first bar but not last
+            if i == 0 and len(bars) > 1:        # first bar but not last
                 count = (time_duration - (bar_duration % time_duration)) % time_duration
             else:
                 count = Fraction(0)
