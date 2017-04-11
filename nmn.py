@@ -578,7 +578,7 @@ def parse_time(s):
     if len(ss) != 2:
         raise ValueError("wrong format for <time> {}".format(s))
     a, b = int(ss[0]), int(ss[1])
-    if (a, b) not in [(4, 4), (3, 4), (6, 8), (9, 8), (12, 8)]:
+    if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8)]:
         raise ValueError("unrecognizable <time> {}/{}".format(a, b))
     return (a, b)
 
