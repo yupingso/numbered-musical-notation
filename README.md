@@ -16,6 +16,6 @@ To produce song slides with LaTeX, however, XeLaTeX and all packages included in
 TODO
 
 ## Tutorial
-[English tutorial](docs/tutorial_English.md) and [Chinese tutorial](https://github.com/yupingso/numbered-musical-notation/blob/master/docs/tutorial_Chinese.md) are provided here.
+[English tutorial](docs/tutorial_English.md) and [Chinese tutorial](docs/tutorial_Chinese.md) are provided here.
 
 
