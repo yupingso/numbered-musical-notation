@@ -186,7 +186,9 @@ class Song:
                     bar_duration += duration
             
             # append to self.melody
-            if time[1] == 4:
+            if time[0] is None:
+                time_duration = 999
+            elif time[1] == 4:
                 time_duration = Fraction(time[0])
             else:
                 time_duration = Fraction(time[0], 2)
@@ -300,11 +302,13 @@ class Song:
                 triplets = []
                 triplet_duration = None
                 for time, idx_list in bars:
-                    if time[1] == 4:
+                    bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
+                    if time[0] is None:
+                        time_duration = bar_duration
+                    elif time[1] == 4:
                         time_duration = Fraction(time[0])
                     else:
                         time_duration = Fraction(time[0], 2)
-                    bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
                     beat = time_duration - bar_duration
                     assert beat >= 0
                     idx_prev = -9
@@ -577,8 +581,11 @@ def parse_time(s):
         raise ValueError("empty <time>")
     if len(ss) != 2:
         raise ValueError("wrong format for <time> {}".format(s))
-    a, b = int(ss[0]), int(ss[1])
-    if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8)]:
+    if ss[0] == '?':
+        a, b = None, int(ss[1])
+    else:
+        a, b = int(ss[0]), int(ss[1])
+    if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8), (None, 4), (None, 8)]:
         raise ValueError("unrecognizable <time> {}/{}".format(a, b))
     return (a, b)
 
