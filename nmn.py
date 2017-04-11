@@ -77,10 +77,18 @@ def parse_pitch(key, s):
     acc, name, octave = re.fullmatch(r"([#$%]?)([0-7a-gA-G])([',]*)", s).groups()
     acc = acc_dict[acc]
     octave = octave.count("'") - octave.count(',')
-    if name in '01234567':
-        name = int(name)
+    if name == "0":
+        acc, name, octave = 0, 0, 0
+    elif key == "solfa":
+        if name in "1234567":
+            name = int(name)
+        else:
+            raise ValueError("only numbers are allowed for <key> solfa: {}".format(s))
     else:
-        name = key_dict[name.upper()]   # fixed
+        if name in "1234567":
+            name = int(name)
+        else:
+            name = key_dict[name.upper()]
         if acc is not None:
             acc -= key[2][name]         # relative to key
         if key[0] <= 4:                 # <= #F major
@@ -90,8 +98,6 @@ def parse_pitch(key, s):
             if name >= key[0]:
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
-    if not name:
-        acc, octave = 0, 0
     return acc, name, octave
 
 
@@ -256,7 +262,7 @@ class Song:
                     note.tie[0] = True
                     nodes[line_node_idx_prev].value.tie[1] = True
                 else:
-                    if all_lyrics[note_idx] != '-':
+                    if all_lyrics[note_idx] != '~':
                         node.text = all_lyrics[note_idx]
                     note_idx += 1
                     line_note_idx += 1
@@ -533,6 +539,8 @@ def parse_key(s):
     # parse
     if not s:
         raise ValueError("empty key")
+    elif s == "solfa":
+        return s
     if re.search(r'\d', s):     # s contains digits
         if len(s) == 1:
             if s[0] != '0':
