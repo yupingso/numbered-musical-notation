@@ -72,9 +72,13 @@ class Node:
 
 
 def parse_pitch(key, s):
-    key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
+    key_dict = dict(zip("ABCDEFG", [6, 7, 1, 2, 3, 4, 5]))
+    extended_name_dict = dict(zip("zaquiop", [5, 6, 7, 1, 2, 3, 4]))
     acc_dict = {'': None, '#': 1, '$': -1, '%': 0}
-    acc, name, octave = re.fullmatch(r"([#$%]?)([0-7a-gA-G])([',]*)", s).groups()
+    match = re.fullmatch(r"([#$%]?)([0-7a-gA-Gqazuiop])([',]*)", s)
+    if match is None:
+        raise ValueError("wrong forat for pitch {}".format(s))
+    acc, name, octave = match.groups()
     acc = acc_dict[acc]
     octave = octave.count("'") - octave.count(',')
     if name == "0":
@@ -82,13 +86,21 @@ def parse_pitch(key, s):
     elif key == "solfa":
         if name in "1234567":
             name = int(name)
+        elif name in extended_name_dict:
+            if name in "zaq":
+                octave -= 1
+            else:
+                octave += 1
+            name = extended_name_dict[name]
         else:
-            raise ValueError("only numbers are allowed for <key> solfa: {}".format(s))
+            raise ValueError("'{}' is not allowed in <key> solfa".format(s))
     else:
         if name in "1234567":
             name = int(name)
-        else:
+        elif name in "cdefgabCDEFGAB":
             name = key_dict[name.upper()]
+        else:
+            raise ValueError("'{}' is not allowed in key {}".format(name, key))
         if acc is not None:
             acc -= key[2][name]         # relative to key
         if key[0] <= 4:                 # <= #F major
@@ -98,6 +110,9 @@ def parse_pitch(key, s):
             if name >= key[0]:
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
+    assert acc in [None, -1, 0, 1]
+    assert name in [0, 1, 2, 3, 4, 5, 6, 7]
+    assert octave in [-1, 0, 1]
     return acc, name, octave
 
 
@@ -143,7 +158,7 @@ class Song:
         if not s:
             return
         
-        pattern_pitch = r"[#$%]?[0-7a-gA-G][',]*"
+        pattern_pitch = r"[#$%]?[0-7a-gA-Gqazuiop][',]*"
         pattern_pitches = r"\[(?:{})+\]".format(pattern_pitch)
         pattern_duration = r"(?:[_=]+|-*)\.*(?:/3)?"
         pattern = "(~?)" + r"({}|{})({})".format(pattern_pitch, pattern_pitches, pattern_duration) + "(~?)"
