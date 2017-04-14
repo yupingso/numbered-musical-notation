@@ -21,17 +21,28 @@ class Note:
         tie[0] = True: tied with the previous Note
         tie[1] = True: tied with the next Note
     """
-    def __init__(self, acc, name, octave=0, duration=Fraction(1), dash=0, underline=0, dot=0, tie=(False, False)):
+    def __init__(self, acc, name, octave=0, duration=Fraction(1), dashes=0, underlines=0, dots=0, tie=(False, False)):
         self.acc = acc
         self.name = name
         self.octave = octave
         self.duration = duration
-        if dash > 0:
-            self.line = dash
+        if dashes is None:
+            self.lines = None
+            self.dots = None
         else:
-            self.line = -underline
-        self.dot = dot
+            if dashes > 0:
+                self.lines = dashes
+            else:
+                self.lines = -underlines
+            self.dots = dots
         self.tie = list(tie)
+
+    def copy(self):
+        note = Note(self.acc, self.name, self.octave, self.duration)
+        note.lines = self.lines
+        note.dots = self.dots
+        note.tie = self.tie.copy()
+        return note
     
     def __str__(self):
         acc_str = {-1: 'b', 0: '%', 1: '#', None: ' '}
@@ -52,13 +63,42 @@ class Node:
     def __init__(self, note):
         if isinstance(note, Note):
             self.type = NOTE_NODE
-        elif note == '-':
-            self.type = DASH_NODE
-        elif note == '.':
-            self.type = DOT_NODE
+            self.value = note
+            self.lines = note.lines
+            self.dots = note.dots
+            # calculate self.lines and self.dots from note.duration
+            if self.lines is None or self.dots is None:
+                duration = note.duration
+                if duration <= 0:
+                    raise ValueError("duration <= 0 for note {}".format(note))
+                numerator, denominator = duration.numerator, duration.denominator
+                n = denominator.bit_length() - 1
+                assert n >= 0   # TODO: remove
+                if (1 << n) != denominator:
+                    raise ValueError("duration.denominator is not a power of 2 for note {}".format(note))
+                one_groups = list(filter(None, "{:b}".format(numerator).split("0")))
+                if len(one_groups) != 1:
+                    raise ValueError("duration {} cannot be represented as a single note".format(note.duration))
+                m = numerator.bit_length() - 1
+                if duration % Fraction(1) == 0:
+                    self.lines = int(duration) - 1
+                    self.dots = 0
+                else:
+                    if m > n:
+                        raise ValueError("duration {} is not integral, but too long for a note".format(note.duration))
+                    self.lines = m - n                  # self.lines <= 0
+                    self.dots = len(one_groups[0]) - 1  # (number of dots) = (number of ones) - 1
+                    assert self.dots >= 0    # TODO: remove
         else:
-            raise ValueError("unknown node type {}".format(note))
-        self.value = note
+            if note == '-':
+                self.type = DASH_NODE
+            elif note == '.':
+                self.type = DOT_NODE
+            else:
+                raise ValueError("unknown node type for {}".format(note))
+            self.value = note
+            self.lines = None
+            self.dots = None
         self.text = None
 
     def __str__(self):
@@ -177,14 +217,26 @@ class Song:
             for tie0, pitches, duration, tie1 in notes:
                 tie0, tie1 = (tie0 != ''), (tie1 != '')
                 dots = duration.count('.')
-                counts = duration.count('-') + 1
+                dashes = duration.count('-')
                 unders = duration.count('=') * 2 + duration.count('_')
-                if counts > 1 and unders > 0:
+                if dashes > 0 and unders > 0:
                     raise ValueError("wrong format for {}".format(notes))
                 triplet = Fraction(1)
                 if "/3" in duration:
                     triplet = Fraction(2, 3)
-                duration = Fraction(counts, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                if time[2]:
+                    if pitches.startswith('[') and pitches.endswith(']'):
+                        duration = Fraction(esdashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                    else:
+                        if dots or unders or (triplet != 1):
+                            raise ValueError("dots, underlines and triplets are not allowed" + \
+                                             "without brackets in <time> {}/{} hyphen={}".format(*time))
+                        duration = Fraction(dashes + 1, time[2] // 4)
+                        # dashes, underlines and dots cannot be calculated right now
+                        # splitting may be needed
+                        dashes, unders, dots = None, None, None
+                else:
+                    duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
                 pitches = pitches.lstrip('[').rstrip(']')
                 pitches = re.findall(r"({})".format(pattern_pitch), pitches)
                 
@@ -196,32 +248,46 @@ class Song:
                     if k < len(pitches) - 1:
                         tie[1] = False
                     # new Note
-                    note = Note(acc, name, octave, duration, counts - 1, unders, dots, tie)
+                    note = Note(acc, name, octave, duration, dashes, unders, dots, tie)
                     note_list.append(note)
                     bar_duration += duration
             
             # append to self.melody
             if time[0] is None:
-                time_duration = 999
+                time_duration = bar_duration
             elif time[1] == 4:
                 time_duration = Fraction(time[0])
             else:
                 time_duration = Fraction(time[0], 2)
             if i == 0 and len(bars) > 1:        # first bar but not last
-                count = (time_duration - (bar_duration % time_duration)) % time_duration
+                beat = (time_duration - (bar_duration % time_duration)) % time_duration
             else:
-                count = Fraction(0)
-            if count > 0:
+                beat = Fraction(0)
+            if beat > 0:
                 self.melody.append((time, []))
             for note in note_list:
-                if count == 0:
+                if beat == 0:
                     self.melody.append((time, []))
-                count += note.duration
-                if count > time_duration:
-                    raise ValueError("{} goes beyond one bar".format(note))
-                elif count == time_duration:
-                    count = Fraction(0)
-                self.melody[-1][1].append(note)
+                if time[2]:
+                    remaining_duration = note.duration
+                    while remaining_duration > 0:
+                        sub_duration = min(remaining_duration, time_duration - beat)
+                        sub_note = note.copy()
+                        sub_note.duration = sub_duration
+                        self.melody[-1][1].append(sub_note)
+                        remaining_duration -= sub_duration
+                        beat += sub_duration
+                        if beat >= time_duration:
+                            beat -= time_duration
+                            self.melody.append((time, []))
+                else:
+                    beat += note.duration
+                    if beat > time_duration:
+                        raise ValueError("{} goes beyond one bar".format(note))
+                    elif beat == time_duration:
+                        beat = Fraction(0)
+                        self.melody.append((time, []))
+                    self.melody[-1][1].append(note)
 
     def merge_melody_lyrics(self):
         """Return sections, a list of sections.
@@ -287,11 +353,11 @@ class Song:
                 prev_tie = note.tie[1]
                 line_node_idx_prev = line_node_idx
                 # append dash Node's
-                for _ in range(note.line):
+                for _ in range(node.lines):
                     bars[-1][1].append(len(nodes))
                     nodes.append(Node('-'))
                 # append dot Node's
-                for _ in range(note.dot):
+                for _ in range(node.dots):
                     bars[-1][1].append(len(nodes))
                     nodes.append(Node('.'))
         if note_idx != num_words:
@@ -306,7 +372,7 @@ class Song:
         bar: (time, node indices)
         tie: (node_idx1, node_idx2)
         underlines_list: list of underlines
-            underlines[k]: list of underlines in level k
+            underlines[k]: list of underlines in depth k
             underline: [node_idx1, node_idx2]
         triplet: [node_idx1, node_idx2, node_idx3]
         """
@@ -350,11 +416,11 @@ class Song:
                                 triplets[-1].append(idx)
                             triplet_duration = note.duration
                         # underline
-                        if note.line < 0:
-                            level = -note.line        # number of underlines
-                            for _ in range(level - len(underlines_list) + 1):
+                        if node.lines < 0:
+                            depth = -node.lines        # number of underlines
+                            for _ in range(depth - len(underlines_list) + 1):
                                 underlines_list.append([])
-                            for k in range(1, level + 1):
+                            for k in range(1, depth + 1):
                                 if new_group or not underlines_list[k]:
                                     underlines_list[k].append([idx, idx])
                                 elif underlines_list[k][-1][1] == idx_prev:
@@ -443,11 +509,11 @@ class Song:
                             line_output.append(r"\node[dot,above of=a{},node distance=6pt] {{}};".format(idx))
                         elif note.octave < 0:
                             node_distance = 7
-                            if note.line <= -3:
+                            if node.lines <= -3:
                                 node_distance = 10
-                            elif note.line == -2:
+                            elif node.lines == -2:
                                 node_distance = 9
-                            elif note.line == -1:
+                            elif node.lines == -1:
                                 node_distance = 8
                             line_output.append(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
                                     .format(idx, node_distance))
@@ -520,7 +586,7 @@ class Song:
                 print("<underlines>")
                 for k, underlines in enumerate(underlines_list):
                     if k >= 1:
-                        print("    level {}: {}".format(k, underlines))
+                        print("    depth {}: {}".format(k, underlines))
                 print("<triplets> {}".format(triplets))
 
 
@@ -591,7 +657,17 @@ def parse_key(s):
 
 def parse_time(s):
     """Convert time signature string to a pair of integers."""
-    ss = s.replace(' ', '').split('/')
+    hyphen = None
+    ss = s.split(maxsplit=1)
+    if len(ss) > 1:
+        hyphen = ss[1].replace(' ', '')
+        if not hyphen.startswith("hyphen="):
+            raise ValueError("wrong format for <time> {}".format(s))
+        hyphen = hyphen[7:]
+        if hyphen not in ["4", "8", "16"]:
+            raise ValueError("only hyphen=[4,8,16] is allowed")
+        hyphen = int(hyphen)
+    ss = ss[0].replace(' ', '').split('/')
     if not ss:
         raise ValueError("empty <time>")
     if len(ss) != 2:
@@ -602,7 +678,7 @@ def parse_time(s):
         a, b = int(ss[0]), int(ss[1])
     if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8), (None, 4), (None, 8)]:
         raise ValueError("unrecognizable <time> {}/{}".format(a, b))
-    return (a, b)
+    return (a, b, hyphen)
 
 
 def load_song(melody_file, lyrics_file=None):
