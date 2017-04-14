@@ -163,7 +163,7 @@ class Song:
         tuple[i] indicates whether i is flat or sharp.
         For example, key = (2,  0, (?, 1,  0,  0,  1,  0,  0,  0)) stands for D major.
     melody: list of bars
-        bar: (time, [notes])
+        bar: (time, start_beat, [notes])
     lyrics: list of sections
         section: (tag, [strings])
     """
@@ -264,37 +264,34 @@ class Song:
             else:
                 beat = Fraction(0)
             if beat > 0:
-                self.melody.append((time, []))
+                # new bar
+                self.melody.append((time, beat, []))
             for note in note_list:
                 if beat == 0:
-                    self.melody.append((time, []))
-                if time[2]:
-                    remaining_duration = note.duration
-                    while remaining_duration > 0:
-                        sub_duration = min(remaining_duration, time_duration - beat)
-                        sub_note = note.copy()
-                        sub_note.duration = sub_duration
-                        self.melody[-1][1].append(sub_note)
-                        remaining_duration -= sub_duration
-                        beat += sub_duration
-                        if beat >= time_duration:
-                            beat -= time_duration
-                            self.melody.append((time, []))
-                else:
-                    beat += note.duration
-                    if beat > time_duration:
-                        raise ValueError("{} goes beyond one bar".format(note))
-                    elif beat == time_duration:
-                        beat = Fraction(0)
-                        self.melody.append((time, []))
-                    self.melody[-1][1].append(note)
+                    # new bar
+                    self.melody.append((time, beat, []))
+                remaining_duration = note.duration
+                while remaining_duration > 0:
+                    sub_duration = min(remaining_duration, time_duration - beat)
+                    if not time[2] and sub_duration != remaining_duration:
+                        raise ValueError("{} goes beyond one bar with time {}/{}"\
+                                .format(note, time[0], time[1]))
+                    sub_note = note.copy()
+                    sub_note.duration = sub_duration
+                    self.melody[-1][-1].append(sub_note)
+                    remaining_duration -= sub_duration
+                    beat += sub_duration
+                    if beat >= time_duration:
+                        beat -= time_duration
+                        # new bar
+                        self.melody.append((time, beat, []))
 
     def merge_melody_lyrics(self):
         """Return sections, a list of sections.
         
         section: (tag, lines)
         line: [nodes, list of bars, list of ties]
-        bar: (time, node indices)
+        bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
         # calculate split indices according to self.lyrics
@@ -316,7 +313,8 @@ class Song:
         line_node_idx_prev = -1
         prev_tie = False
         sections = []
-        for time, notes in self.melody:
+        for time, start_beat, notes in self.melody:
+            beat = start_beat
             for k, note in enumerate(notes):
                 note_tied = (note.tie[0] or prev_tie) and (line_node_idx > 0)
                 if not note_tied and note_idx >= num_words:
@@ -335,11 +333,12 @@ class Song:
                 nodes, bars, ties = line
                 # new bar
                 if k == 0 or not bars:
-                    bars.append((time, []))
+                    bars.append((time, beat, []))
+                beat += note.duration
                 # append note Node
                 node = Node(note)
                 line_node_idx = len(nodes)
-                bars[-1][1].append(line_node_idx)
+                bars[-1][-1].append(line_node_idx)
                 if note_tied:
                     ties.append((line_node_idx_prev, line_node_idx))
                     note.tie[0] = True
@@ -354,11 +353,11 @@ class Song:
                 line_node_idx_prev = line_node_idx
                 # append dash Node's
                 for _ in range(node.lines):
-                    bars[-1][1].append(len(nodes))
+                    bars[-1][-1].append(len(nodes))
                     nodes.append(Node('-'))
                 # append dot Node's
                 for _ in range(node.dots):
-                    bars[-1][1].append(len(nodes))
+                    bars[-1][-1].append(len(nodes))
                     nodes.append(Node('.'))
         if note_idx != num_words:
             raise ValueError("{} notes != {} words".format(note_idx, num_words))
@@ -369,7 +368,7 @@ class Song:
         
         section: (tag, lines)
         line: [nodes, bars, ties, underlines_list, triplets]
-        bar: (time, node indices)
+        bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         underlines_list: list of underlines
             underlines[k]: list of underlines in depth k
@@ -382,7 +381,7 @@ class Song:
                 underlines_list = [None]
                 triplets = []
                 triplet_duration = None
-                for time, idx_list in bars:
+                for time, start_beat, idx_list in bars:
                     bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
                     if time[0] is None:
                         time_duration = bar_duration
@@ -390,7 +389,7 @@ class Song:
                         time_duration = Fraction(time[0])
                     else:
                         time_duration = Fraction(time[0], 2)
-                    beat = time_duration - bar_duration
+                    beat = start_beat
                     assert beat >= 0
                     idx_prev = -9
                     for idx in idx_list:
@@ -578,8 +577,8 @@ class Song:
                 print("-" * 50)
                 #for k, note in enumerate(notes):
                 #    print("<note {:02d}> {}".format(k, note))
-                for time, a in bars:
-                    print("<time> {}/{}".format(time[0], time[1]))
+                for time, start_beat, a in bars:
+                    print("<time> {}/{} beat={}".format(time[0], time[1], start_beat))
                     for idx in a:
                         print("    <node {:02d}> {}".format(idx, nodes[idx]))
                 print("<ties> {}".format(ties))
