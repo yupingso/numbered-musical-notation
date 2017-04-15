@@ -2,6 +2,7 @@ import sys
 import os
 import re
 from fractions import Fraction
+import bisect
 
 
 class Note:
@@ -60,6 +61,8 @@ DOT_NODE = 2
 
 
 class Node:
+    possible_ends = {}
+
     def __init__(self, note):
         if isinstance(note, Note):
             self.type = NOTE_NODE
@@ -73,7 +76,6 @@ class Node:
                     raise ValueError("duration <= 0 for note {}".format(note))
                 numerator, denominator = duration.numerator, duration.denominator
                 n = denominator.bit_length() - 1
-                assert n >= 0   # TODO: remove
                 if (1 << n) != denominator:
                     raise ValueError("duration.denominator is not a power of 2 for note {}".format(note))
                 one_groups = list(filter(None, "{:b}".format(numerator).split("0")))
@@ -84,11 +86,10 @@ class Node:
                     self.lines = int(duration) - 1
                     self.dots = 0
                 else:
-                    if m > n:
+                    if m > n:   # not allowed in numbered musical notation (e.g., duration = 7/2)
                         raise ValueError("duration {} is not integral, but too long for a note".format(note.duration))
                     self.lines = m - n                  # self.lines <= 0
                     self.dots = len(one_groups[0]) - 1  # (number of dots) = (number of ones) - 1
-                    assert self.dots >= 0    # TODO: remove
         else:
             if note == '-':
                 self.type = DASH_NODE
@@ -101,12 +102,143 @@ class Node:
             self.dots = None
         self.text = None
 
+    @classmethod
+    def init_possible_ends(cls, n, m):
+        """Each beat is divided into (2**n) intervals, and there are m beats.
+
+        Every duration consists of main duration and dots duration.
+        The main duration consists of (2**k) intervals.
+        """
+        if (n, m) in cls.possible_ends:
+            return
+        num = m << n
+        ends = [set() for _ in range(num)]
+        for k in range(n):
+            for a in range(m << (n - k)):
+                start = a << k
+                end = (a + 1) << k
+                ends[start].add(end)
+                if a % 2 == 1:
+                    for j in range(k - 1, -1, -1):
+                        start -= (1 << j)
+                        if start < 0:
+                            break
+                        ends[start].add(end)
+                else:
+                    for j in range(k - 1, -1, -1):
+                        end += (1 << j)
+                        if end > num:
+                            break
+                        ends[start].add(end)
+        for k in range(n, n + m.bit_length()):
+            for a in range(0, num, 1 << n):
+                start = a
+                end = a + (1 << k)
+                if end > num:
+                    break
+                ends[start].add(end)
+                for j in range(k - 1, -1, -1):
+                    start -= (1 << j)
+                    if start < 0:
+                        break
+                    ends[start].add(end)
+                start = a
+                for j in range(k - 1, -1, -1):
+                    end += (1 << j)
+                    if end > num:
+                        break
+                    ends[start].add(end)
+        for i in range(num):
+            ends[i] = sorted(ends[i])
+        cls.possible_ends[(n, m)] = ends
+
+    @classmethod
+    def split_note(cls, time, start_beat, note):
+        if not time[2]:
+            raise ValueError("no need to split note for time {}".format(time))
+        if time[0] is None:
+            raise ValueError("cannot split note for time ?/{}".format(time[1]))
+        note.lines, note.dots = None, None      # ignore lines and dots
+        duration = note.duration
+        p = time[2].bit_length() - 3
+        if time[1] == 4:
+            unit = (1 << p)
+            if time[0] == 2:
+                n, m = p + 1, 1
+            elif time[0] == 3:
+                n, m = p, 3
+            elif time[0] == 4:
+                n, m = p + 2, 1
+            else:
+                raise ValueError("unknown time[0] {}".format(time[0]))
+            n_unit, m_unit = 0, time[0]
+        else:
+            unit = int(Fraction(3, 2) * (1 << p))
+            n, m = p - 1, 3
+            if time[0] == 6:
+                n_unit, m_unit = 0, 2
+            elif time[0] == 9:
+                n_unit, m_unit = 0, 3
+            elif time[0] == 12:
+                n_unit, m_unit = 2, 1
+            else:
+                raise ValueError("unknown time[0] {}".format(time[0]))
+        cls.init_possible_ends(n, m)
+        ends = cls.possible_ends[(n, m)]
+        cls.init_possible_ends(n_unit, m_unit)
+        ends_unit = cls.possible_ends[(n_unit, m_unit)]
+        end = int((start_beat + duration) * (1 << p))
+        subnodes = []
+        beat = start_beat
+        print("note", note) #XXX
+        while beat < start_beat + duration:
+            start = int(beat * (1 << p))
+            subend = None
+            # multiple of units
+            if start % unit == 0:
+                for e_rel in ends_unit[start // unit]:
+                    e = e_rel * unit
+                    if e > end:
+                        break
+                    if time[1] == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
+                        continue
+                    subend = e
+                    print("      E ", Fraction(subend - start, 1 << p)) #XXX
+            # contains "dots"
+            base = start - start % unit
+            for e_rel in ends[start % unit]:
+                e = base + e_rel
+                if e > end:
+                    break
+                length = e - start
+                if (time[1] == 4 and length >= unit * 2) or \
+                   (time[1] == 8 and length > unit):
+                    break
+                print("      e ", Fraction(length, 1 << p)) #XXX
+                if subend is None or e > subend:
+                    subend = e
+            if subend is None:
+                raise ValueError("cannot find ending point in ({}, {}]".format(start, end))
+            end_beat = Fraction(subend, 1 << p)
+            subnote = note.copy()
+            subnote.duration = end_beat - beat
+            if not subnodes:                            # first
+                if end_beat != start_beat + duration:   # not last
+                    subnote.tie[1] = True
+            else:
+                subnote.tie[0] = True
+            subnodes.append(Node(subnote))
+            print("   >", subnote)  #XXX
+            beat = end_beat
+        return subnodes
+
     def __str__(self):
         if self.type == NOTE_NODE:
+            underlines = max(-self.lines, 0)
             if self.value.tie[1]:
-                return "{} {} ~".format(self.value, self.text)
+                return "{} u{}  {} ~".format(self.value, underlines, self.text)
             else:
-                return "{} {}".format(self.value, self.text)
+                return "{} u{}  {}".format(self.value, underlines, self.text)
         else:
             return " {}".format(self.value)
 
@@ -271,6 +403,7 @@ class Song:
                     # new bar
                     self.melody.append((time, beat, []))
                 remaining_duration = note.duration
+                first = True
                 while remaining_duration > 0:
                     sub_duration = min(remaining_duration, time_duration - beat)
                     if not time[2] and sub_duration != remaining_duration:
@@ -278,6 +411,8 @@ class Song:
                                 .format(note, time[0], time[1]))
                     sub_note = note.copy()
                     sub_note.duration = sub_duration
+                    if not first:
+                        sub_note.tie[0] = True
                     self.melody[-1][-1].append(sub_note)
                     remaining_duration -= sub_duration
                     beat += sub_duration
@@ -285,6 +420,7 @@ class Song:
                         beat -= time_duration
                         # new bar
                         self.melody.append((time, beat, []))
+                    first = False
 
     def merge_melody_lyrics(self):
         """Return sections, a list of sections.
@@ -334,31 +470,36 @@ class Song:
                 # new bar
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
-                beat += note.duration
-                # append note Node
-                node = Node(note)
-                line_node_idx = len(nodes)
-                bars[-1][-1].append(line_node_idx)
-                if note_tied:
-                    ties.append((line_node_idx_prev, line_node_idx))
-                    note.tie[0] = True
-                    nodes[line_node_idx_prev].value.tie[1] = True
+                # split note
+                if time[2]:
+                    subnodes = Node.split_note(time, beat, note)
                 else:
-                    if all_lyrics[note_idx] != '~':
-                        node.text = all_lyrics[note_idx]
-                    note_idx += 1
-                    line_note_idx += 1
-                nodes.append(node)
+                    subnodes = [Node(note)]
+                for l, node in enumerate(subnodes):
+                    # append note Node
+                    line_node_idx = len(nodes)
+                    bars[-1][-1].append(line_node_idx)
+                    if (l == 0 and note_tied) or l > 0:     # tied with previous note or sub-note
+                        ties.append((line_node_idx_prev, line_node_idx))
+                        node.value.tie[0] = True
+                        nodes[line_node_idx_prev].value.tie[1] = True
+                    else:
+                        if all_lyrics[note_idx] != '~':
+                            node.text = all_lyrics[note_idx]
+                        note_idx += 1
+                        line_note_idx += 1
+                    nodes.append(node)
+                    line_node_idx_prev = line_node_idx
+                    # append dash Node's
+                    for _ in range(node.lines):
+                        bars[-1][-1].append(len(nodes))
+                        nodes.append(Node('-'))
+                    # append dot Node's
+                    for _ in range(node.dots):
+                        bars[-1][-1].append(len(nodes))
+                        nodes.append(Node('.'))
                 prev_tie = note.tie[1]
-                line_node_idx_prev = line_node_idx
-                # append dash Node's
-                for _ in range(node.lines):
-                    bars[-1][-1].append(len(nodes))
-                    nodes.append(Node('-'))
-                # append dot Node's
-                for _ in range(node.dots):
-                    bars[-1][-1].append(len(nodes))
-                    nodes.append(Node('.'))
+                beat += note.duration
         if note_idx != num_words:
             raise ValueError("{} notes != {} words".format(note_idx, num_words))
         return sections
@@ -677,6 +818,8 @@ def parse_time(s):
         a, b = int(ss[0]), int(ss[1])
     if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8), (None, 4), (None, 8)]:
         raise ValueError("unrecognizable <time> {}/{}".format(a, b))
+    if hyphen and hyphen < b:
+        raise ValueError("hyphen must >= {} for <time> {}/{}".format(b, a, b))
     return (a, b, hyphen)
 
 
