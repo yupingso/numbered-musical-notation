@@ -205,8 +205,9 @@ class Node:
                     subend = e
                     print("      E ", Fraction(subend - start, 1 << p)) #XXX
             # contains "dots"
-            base = start - start % unit
-            for e_rel in ends[start % unit]:
+            base = start - start % (1 << n)
+            print("    start = {}, unit = {}".format(start, unit))
+            for e_rel in ends[start % (1 << n)]:
                 e = base + e_rel
                 if e > end:
                     break
@@ -423,7 +424,7 @@ class Song:
                     first = False
 
     def merge_melody_lyrics(self):
-        """Return sections, a list of sections.
+        """Return a list of sections.
         
         section: (tag, lines)
         line: [nodes, list of bars, list of ties]
