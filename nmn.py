@@ -400,12 +400,12 @@ class Song:
                 # new bar
                 self.melody.append((time, beat, []))
             for note in note_list:
-                if beat == 0:
-                    # new bar
-                    self.melody.append((time, beat, []))
                 remaining_duration = note.duration
                 first = True
                 while remaining_duration > 0:
+                    if beat == 0:
+                        # new bar
+                        self.melody.append((time, beat, []))
                     sub_duration = min(remaining_duration, time_duration - beat)
                     if not time[2] and sub_duration != remaining_duration:
                         raise ValueError("{} goes beyond one bar with time {}/{}"\
@@ -417,10 +417,9 @@ class Song:
                     self.melody[-1][-1].append(sub_note)
                     remaining_duration -= sub_duration
                     beat += sub_duration
-                    if beat >= time_duration:
-                        beat -= time_duration
-                        # new bar
-                        self.melody.append((time, beat, []))
+                    assert beat <= time_duration
+                    if beat == time_duration:
+                        beat = 0
                     first = False
 
     def merge_melody_lyrics(self):
@@ -453,7 +452,7 @@ class Song:
         for time, start_beat, notes in self.melody:
             beat = start_beat
             for k, note in enumerate(notes):
-                note_tied = (note.tie[0] or prev_tie) and (line_node_idx > 0)
+                note_tied = (note.tie[0] or prev_tie)
                 if not note_tied and note_idx >= num_words:
                     raise ValueError("#notes > {} words".format(num_words))
                 # new section
