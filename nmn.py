@@ -206,7 +206,6 @@ class Node:
                     print("      E ", Fraction(subend - start, 1 << p)) #XXX
             # contains "dots"
             base = start - start % (1 << n)
-            print("    start = {}, unit = {}".format(start, unit))
             for e_rel in ends[start % (1 << n)]:
                 e = base + e_rel
                 if e > end:
@@ -344,6 +343,7 @@ class Song:
             bar_duration = Fraction(0)
             note_list = []
             
+            # parse notes in bar
             notes = re.findall(pattern, bar)
             if ''.join([''.join(note) for note in notes]) != bar:
                 raise ValueError("wrong format for {} (notes = {})".format(bar, notes))
@@ -359,14 +359,12 @@ class Song:
                     triplet = Fraction(2, 3)
                 if time[2]:
                     if pitches.startswith('[') and pitches.endswith(']'):
-                        duration = Fraction(esdashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                        duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
                     else:
                         if dots or unders or (triplet != 1):
                             raise ValueError("dots, underlines and triplets are not allowed" + \
                                              "without brackets in <time> {}/{} hyphen={}".format(*time))
                         duration = Fraction(dashes + 1, time[2] // 4)
-                        # dashes, underlines and dots cannot be calculated right now
-                        # splitting may be needed
                         dashes, unders, dots = None, None, None
                 else:
                     duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
@@ -384,6 +382,7 @@ class Song:
                     note = Note(acc, name, octave, duration, dashes, unders, dots, tie)
                     note_list.append(note)
                     bar_duration += duration
+            assert note_list
             
             # append to self.melody
             if time[0] is None:
