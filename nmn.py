@@ -180,6 +180,12 @@ class Note:
             print("   >", subnote)  #XXX
             beat = end_beat
 
+        for i, subnote in enumerate(subnotes):
+            if i > 0:
+                subnote.tie[0] = True
+            if i < len(subnotes) - 1:
+                subnote.tie[1] = True
+
         return subnotes
 
     @classmethod
