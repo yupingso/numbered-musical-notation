@@ -396,15 +396,14 @@ class Song:
             else:
                 beat = Fraction(0)
             if beat > 0:
-                # new bar
-                self.melody.append((time, beat, []))
+                self.melody.append((time, beat, []))            # new bar
             for note in note_list:
+                assert note.duration > 0
                 remaining_duration = note.duration
                 first = True
                 while remaining_duration > 0:
                     if beat == 0:
-                        # new bar
-                        self.melody.append((time, beat, []))
+                        self.melody.append((time, beat, []))    # new bar
                     sub_duration = min(remaining_duration, time_duration - beat)
                     if not time[2] and sub_duration != remaining_duration:
                         raise ValueError("{} goes beyond one bar with time {}/{}"\
@@ -420,6 +419,21 @@ class Song:
                     if beat == time_duration:
                         beat = 0
                     first = False
+
+    def make_ties_consistent(self):
+        """If note0 and note1 are consecutive, make sure that (note0.tie[1] == note1.tie[0])."""
+        if not self.melody:
+            return
+        prev_tie = False
+        for time, start_beat, notes in self.melody:
+            if not notes:
+                raise ValueError("empty bar in self.melody")
+            for note in notes:
+                if prev_tie:
+                    note.tie[0] = True
+                prev_tie = note.tie[1]
+        self.melody[ 0][-1][ 0].tie[0] = False  # first note
+        self.melody[-1][-1][-1].tie[1] = False  # last note
 
     def merge_melody_lyrics(self):
         """Return a list of sections.
@@ -446,20 +460,18 @@ class Song:
         line_note_idx = 0
         line_node_idx = 0
         line_node_idx_prev = -1
-        prev_tie = False
         sections = []
         for time, start_beat, notes in self.melody:
             beat = start_beat
             for k, note in enumerate(notes):
-                note_tied = (note.tie[0] or prev_tie)
-                if not note_tied and note_idx >= num_words:
+                if not note.tie[0] and note_idx >= num_words:
                     raise ValueError("#notes > {} words".format(num_words))
                 # new section
-                if not note_tied and note_idx in split_sections:
+                if not note.tie[0] and note_idx in split_sections:
                     tag = split_sections[note_idx]
                     sections.append((tag, []))
                 # new line
-                if not note_tied and note_idx in split_lines:
+                if not note.tie[0] and note_idx in split_lines:
                     sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
                     line_note_idx = 0
                     line_node_idx_prev = -1
@@ -478,7 +490,7 @@ class Song:
                     # append note Node
                     line_node_idx = len(nodes)
                     bars[-1][-1].append(line_node_idx)
-                    if (l == 0 and note_tied) or l > 0:     # tied with previous note or sub-note
+                    if (l == 0 and note.tie[0]) or l > 0:     # tied with previous note or sub-note
                         ties.append((line_node_idx_prev, line_node_idx))
                         node.value.tie[0] = True
                         nodes[line_node_idx_prev].value.tie[1] = True
@@ -497,7 +509,6 @@ class Song:
                     for _ in range(node.dots):
                         bars[-1][-1].append(len(nodes))
                         nodes.append(Node('.'))
-                prev_tie = note.tie[1]
                 beat += note.duration
         if note_idx != num_words:
             raise ValueError("{} notes != {} words".format(note_idx, num_words))
@@ -848,6 +859,7 @@ def load_song(melody_file, lyrics_file=None):
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)
+    song.make_ties_consistent()
 
     # lyrics
     with open(lyrics_file) as f:
