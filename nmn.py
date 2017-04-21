@@ -123,8 +123,7 @@ class Note:
             elif time[0] == 3:
                 n, m = p, 3
             elif time[0] == 4:
-                #n, m = p + 2, 1
-                n, m = p, 4 #XXX
+                n, m = p + 2, 1
             else:
                 raise ValueError("unknown time[0] {}".format(time[0]))
             n_unit, m_unit = 0, time[0]
