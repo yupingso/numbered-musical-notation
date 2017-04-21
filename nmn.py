@@ -59,12 +59,17 @@ class Note:
             return
         num = m << n
         ends = [set() for _ in range(num)]
+        # k < n
         for k in range(n):
-            for a in range(m << (n - k)):
-                start = a << k
-                end = (a + 1) << k
+            for a in range(0, num, 1 << k):
+                start = a
+                end = a + (1 << k)
+                if end > num:
+                    break
                 ends[start].add(end)
-                if a % 2 == 1:
+                if (a >> k) % 2 == 0 and k > 0 and end + (1 << (k - 1)) < num:
+                    ends[start + (1 << (k - 1))].add(end + (1 << (k - 1)))
+                if (a >> k) % 2 == 1:
                     for j in range(k - 1, -1, -1):
                         start -= (1 << j)
                         if start < 0:
@@ -76,6 +81,7 @@ class Note:
                         if end > num:
                             break
                         ends[start].add(end)
+        # k >= n
         for k in range(n, n + m.bit_length()):
             for a in range(0, num, 1 << n):
                 start = a
@@ -83,6 +89,8 @@ class Note:
                 if end > num:
                     break
                 ends[start].add(end)
+                if k > 0 and end + (1 << (k - 1)) < num:
+                    ends[start + (1 << (k - 1))].add(end + (1 << (k - 1)))
                 for j in range(k - 1, -1, -1):
                     start -= (1 << j)
                     if start < 0:
@@ -115,7 +123,8 @@ class Note:
             elif time[0] == 3:
                 n, m = p, 3
             elif time[0] == 4:
-                n, m = p + 2, 1
+                #n, m = p + 2, 1
+                n, m = p, 4 #XXX
             else:
                 raise ValueError("unknown time[0] {}".format(time[0]))
             n_unit, m_unit = 0, time[0]
@@ -271,7 +280,7 @@ def parse_pitch(key, s):
     acc = acc_dict[acc]
     octave = octave.count("'") - octave.count(',')
     if name == "0":
-        acc, name, octave = 0, 0, 0
+        acc, name, octave = None, 0, 0
     elif key == "solfa":
         if name in "1234567":
             name = int(name)
@@ -453,8 +462,14 @@ class Song:
         self.melody[-1][-1][-1].tie[1] = False  # last note
 
     def try_split_notes(self):
-        """Try to split note if note.dashes is None, and modify self.melody in place."""
+        """Try to split note, and modify self.melody in place.
+
+        If note.lines or note.dots is None, splitting is necessary.
+        For these sub-notes, perform a 2nd-staged grouping.
+        """
         for time, start_beat, notes in self.melody:
+            if not time[2]:
+                continue
             subnotes = []
             beat = start_beat
             for note in notes:
@@ -463,6 +478,7 @@ class Song:
                 else:
                     subnotes.append(note)
                 beat += note.duration
+            beat = start_beat
             notes[:] = subnotes
 
     def merge_melody_lyrics(self):
@@ -483,27 +499,24 @@ class Song:
                 split_lines.append(sum_len)
                 sum_len += len(s)
         all_lyrics = ''.join([''.join(section[1]) for section in self.lyrics])
-        num_words = len(all_lyrics)     # contains '-'
+        num_words = len(all_lyrics)     # contains "~"
 
         # split melody
         note_idx = 0
-        line_note_idx = 0
         line_node_idx = 0
         line_node_idx_prev = -1
         sections = []
         for time, start_beat, notes in self.melody:
             beat = start_beat
             for k, note in enumerate(notes):
-                if not note.tie[0] and note_idx >= num_words:
-                    raise ValueError("#notes > {} words".format(num_words))
                 # new section
-                if not note.tie[0] and note_idx in split_sections:
+                if not note.tie[0] and note.name and note_idx in split_sections:
                     tag = split_sections[note_idx]
                     sections.append((tag, []))
+                    new_section = True
                 # new line
-                if not note.tie[0] and note_idx in split_lines:
+                if not note.tie[0] and note.name and note_idx in split_lines:
                     sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
-                    line_note_idx = 0
                     line_node_idx_prev = -1
                     prev_tie = False
                 line = sections[-1][1][-1]
@@ -520,10 +533,12 @@ class Song:
                     node.value.tie[0] = True
                     nodes[line_node_idx_prev].value.tie[1] = True
                 else:
-                    if all_lyrics[note_idx] != '~':
-                        node.text = all_lyrics[note_idx]
-                    note_idx += 1
-                    line_note_idx += 1
+                    if note.name:
+                        if note_idx >= num_words:
+                            raise ValueError("#notes > {} words".format(num_words))
+                        if all_lyrics[note_idx] != '~' and note.name:
+                            node.text = all_lyrics[note_idx]
+                        note_idx += 1
                 nodes.append(node)
                 line_node_idx_prev = line_node_idx
                 # append dash Node's
