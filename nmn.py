@@ -107,7 +107,8 @@ class Note:
         cls.possible_ends[(n, m)] = ends
 
     @classmethod
-    def split_note(cls, time, start_beat, note):
+    def split_note(cls, time, start_beat, note, _DEBUG=False):
+        DEBUG_LOG = []
         if not time[2]:
             raise ValueError("no need to split note for time {}".format(time))
         if time[0] is None:
@@ -146,7 +147,7 @@ class Note:
         end = int((start_beat + duration) * (1 << p))
         subnotes = []
         beat = start_beat
-        print("note", note) #XXX
+        DEBUG_LOG.append("note {}".format(note))
         
         while beat < start_beat + duration:
             start = int(beat * (1 << p))
@@ -160,7 +161,7 @@ class Note:
                     if time[1] == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
                         continue
                     subend = e
-                    print("      E ", Fraction(subend - start, 1 << p)) #XXX
+                    DEBUG_LOG.append("      E {}".format(Fraction(subend - start, 1 << p)))
             # contains "dots"
             base = start - start % (1 << n)
             for e_rel in ends[start % (1 << n)]:
@@ -171,7 +172,7 @@ class Note:
                 if (time[1] == 4 and length >= unit * 2) or \
                    (time[1] == 8 and length > unit):
                     break
-                print("      e ", Fraction(length, 1 << p)) #XXX
+                DEBUG_LOG.append("      e {}".format(Fraction(length, 1 << p)))
                 if subend is None or e > subend:
                     subend = e
             if subend is None:
@@ -185,7 +186,7 @@ class Note:
             else:
                 subnote.tie[0] = True
             subnotes.append(subnote)
-            print("   >", subnote)  #XXX
+            DEBUG_LOG.append("   > {}".format(subnote))
             beat = end_beat
 
         for i, subnote in enumerate(subnotes):
@@ -193,7 +194,10 @@ class Note:
                 subnote.tie[0] = True
             if i < len(subnotes) - 1:
                 subnote.tie[1] = True
-
+        
+        if _DEBUG:
+            with open("log/split_note.log", "w") as f:
+                f.write("\n".join(DEBUG_LOG))
         return subnotes
 
     @classmethod
@@ -482,7 +486,7 @@ class Song:
             beat = start_beat
             notes[:] = subnotes
 
-    def merge_melody_lyrics(self):
+    def merge_melody_lyrics(self, _DEBUG=False):
         """Return a list of sections.
         
         section: (tag, lines)
@@ -490,6 +494,8 @@ class Song:
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
+        DEBUG_LOG = []
+        
         # calculate split indices according to self.lyrics
         sum_len = 0
         split_sections = {}
@@ -551,8 +557,13 @@ class Song:
                     bars[-1][-1].append(len(nodes))
                     nodes.append(Node('.'))
                 beat += note.duration
-        if note_idx != num_words:
-            raise ValueError("{} notes != {} words".format(note_idx, num_words))
+        if lyrics_idx != num_words:
+            raise ValueError("{} notes != {} words".format(lyrics_idx, num_words))
+        
+        if _DEBUG:
+            with open("log/merge.log", "w") as f:
+                f.write("\n".join(DEBUG_LOG))
+        
         return sections
     
     def group_underlines(self, sections):
