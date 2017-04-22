@@ -509,7 +509,8 @@ class Song:
         num_words = len(all_lyrics)     # contains "~"
 
         # split melody
-        note_idx = 0
+        lyrics_idx = 0
+        section_added, line_added = False, False    # whether these are added for this lyrics_idx
         line_node_idx = 0
         line_node_idx_prev = -1
         sections = []
@@ -517,15 +518,15 @@ class Song:
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
-                if not note.tie[0] and note.name and note_idx in split_sections:
-                    tag = split_sections[note_idx]
+                if not note.tie[0] and not section_added and lyrics_idx in split_sections:
+                    tag = split_sections[lyrics_idx]
                     sections.append((tag, []))
-                    new_section = True
+                    section_added = True
                 # new line
-                if not note.tie[0] and note.name and note_idx in split_lines:
+                if not note.tie[0] and not line_added and lyrics_idx in split_lines:
                     sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
+                    line_added = True
                     line_node_idx_prev = -1
-                    prev_tie = False
                 line = sections[-1][1][-1]
                 nodes, bars, ties = line
                 # new bar
@@ -541,11 +542,12 @@ class Song:
                     nodes[line_node_idx_prev].value.tie[1] = True
                 else:
                     if note.name:
-                        if note_idx >= num_words:
+                        if lyrics_idx >= num_words:
                             raise ValueError("#notes > {} words".format(num_words))
-                        if all_lyrics[note_idx] != '~' and note.name:
-                            node.text = all_lyrics[note_idx]
-                        note_idx += 1
+                        if all_lyrics[lyrics_idx] != '~' and note.name:
+                            node.text = all_lyrics[lyrics_idx]
+                        lyrics_idx += 1
+                        section_added, line_added = False, False
                 nodes.append(node)
                 line_node_idx_prev = line_node_idx
                 # append dash Node's
