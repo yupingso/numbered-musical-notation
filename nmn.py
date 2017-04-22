@@ -758,9 +758,17 @@ class Song:
                 # triplets
                 line_output.append("\n\n% triplets")
                 for triplet in triplets:
-                    line_output.append(r"\node[above of=a{},node distance=9pt] (tri) {{\tiny{{3}}}};".format(triplet[1]))
-                    line_output.append(r"\draw[tie0] (a{}.north) +(0,2pt) to ($(tri.west)+(-1pt,0)$);".format(triplet[0]))
-                    line_output.append(r"\draw[tie1] (a{}.north) +(0,2pt) to ($(tri.east)+(+1pt,0)$);".format(triplet[2]))
+                    dis0, dis1 = 2, 9
+                    if nodes[triplet[0]].value.octave >= 1 or nodes[triplet[2]].value.octave >= 1:
+                        dis0 = 5
+                    if nodes[triplet[1]].value.octave >= 1:
+                        dis1 = 12
+                    line_output.append(r"\node[above of=a{},node distance={}pt] (tri) {{\tiny{{3}}}};" \
+                            .format(triplet[1], dis1))
+                    line_output.append(r"\draw[tie0] (a{}.north) +(0,{}pt) to ($(tri.west)+(-1pt,0)$);" \
+                            .format(triplet[0], dis0))
+                    line_output.append(r"\draw[tie1] (a{}.north) +(0,{}pt) to ($(tri.east)+(+1pt,0)$);" \
+                            .format(triplet[2], dis0))
                 
                 line_output.append("")
                 line_output.append(r"\end{tikzpicture}")
