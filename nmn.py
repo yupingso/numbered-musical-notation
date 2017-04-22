@@ -274,9 +274,10 @@ class Node:
 
 def parse_pitch(key, s):
     key_dict = dict(zip("ABCDEFG", [6, 7, 1, 2, 3, 4, 5]))
-    extended_name_dict = dict(zip("zaquiop", [5, 6, 7, 1, 2, 3, 4]))
+    extended_upper_name_dict = dict(zip("qwertyu", range(1, 8)))
+    extended_lower_name_dict = dict(zip("zxcvbnm", range(1, 8)))
     acc_dict = {'': None, '#': 1, '$': -1, '%': 0}
-    match = re.fullmatch(r"([#$%]?)([0-7a-gA-Gqazuiop])([',]*)", s)
+    match = re.fullmatch(r"([#$%]?)([0-7a-zA-Z])([',]*)", s)
     if match is None:
         raise ValueError("wrong forat for pitch {}".format(s))
     acc, name, octave = match.groups()
@@ -287,12 +288,12 @@ def parse_pitch(key, s):
     elif key == "solfa":
         if name in "1234567":
             name = int(name)
-        elif name in extended_name_dict:
-            if name in "zaq":
-                octave -= 1
-            else:
-                octave += 1
-            name = extended_name_dict[name]
+        elif name in extended_upper_name_dict:
+            name = extended_upper_name_dict[name]
+            octave += 1
+        elif name in extended_lower_name_dict:
+            name = extended_lower_name_dict[name]
+            octave -= 1
         else:
             raise ValueError("'{}' is not allowed in <key> solfa".format(s))
     else:
@@ -359,7 +360,7 @@ class Song:
         if not s:
             return
         
-        pattern_pitch = r"[#$%]?[0-7a-gA-Gqazuiop][',]*"
+        pattern_pitch = r"[#$%]?[0-7a-zA-Z][',]*"
         pattern_pitches = r"\[(?:{})+\]".format(pattern_pitch)
         pattern_duration = r"(?:[_=]+|-*)\.*(?:/3)?"
         pattern = "(~?)" + r"({}|{})({})".format(pattern_pitch, pattern_pitches, pattern_duration) + "(~?)"
