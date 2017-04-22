@@ -682,6 +682,7 @@ class Song:
 \tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
                 line_output.append("\n\n% nodes")
+                line_output.append(r"\node at (0pt, 12pt) {}; % for space adjustment")
                 
                 pos = 0
                 first_text_idx = None
