@@ -683,7 +683,8 @@ class Song:
                 line_output.append("\n\n% nodes")
                 
                 pos = 0
-                for k, (time, idx_list) in enumerate(bars):
+                first_text_idx = None
+                for k, (time, start_beat, idx_list) in enumerate(bars):
                     # new bar
                     if k > 0:
                         pos -= 2.5
@@ -723,10 +724,14 @@ class Song:
                                     .format(idx, node_distance))
                         # text
                         if node.text:
-                            if idx == 0:
-                                line_output.append(r"\node[lyrics] (t0) at (0,-17pt) {{{}}};".format(node.text))
+                            text = r"{0}{1}{0}".format("\phantom{|}", node.text)
+                            if first_text_idx is None:
+                                line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
+                                        .format(idx, text))
+                                first_text_idx = idx
                             else:
-                                line_output.append(r"\node[lyrics] at (a{} |- t0) {{{}}};".format(idx, node.text))
+                                line_output.append(r"\node[lyrics] at (a{} |- t{}) {{{}}};" \
+                                        .format(idx, first_text_idx, text))
                             line_lyrics += node.text
                         pos += 10
 
