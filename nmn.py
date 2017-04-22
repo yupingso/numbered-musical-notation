@@ -456,6 +456,8 @@ class Song:
             for note in notes:
                 if prev_tie:
                     note.tie[0] = True
+                if note.name == 0:
+                    note.tie = [False, False]
                 prev_tie = note.tie[1]
         self.melody[ 0][-1][ 0].tie[0] = False  # first note
         self.melody[-1][-1][-1].tie[1] = False  # last note
