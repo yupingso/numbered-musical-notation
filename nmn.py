@@ -726,7 +726,7 @@ class Song:
                                     .format(idx, node_distance))
                         # text
                         if node.text:
-                            text = r"{0}{1}{0}".format("\phantom{|}", node.text)
+                            text = "{0}{1}{0}".format("\phantom{|}", node.text)
                             if first_text_idx is None:
                                 line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
                                         .format(idx, text))
@@ -735,6 +735,11 @@ class Song:
                                 line_output.append(r"\node[lyrics] at (a{} |- t{}) {{{}}};" \
                                         .format(idx, first_text_idx, text))
                             line_lyrics += node.text
+                        elif first_text_idx is None:
+                            text = r"\phantom{{|{}|}}".format("天")
+                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
+                                    .format(idx, text))
+                            first_text_idx = idx
                         pos += 10
 
                 # ties
