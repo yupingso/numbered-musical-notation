@@ -749,7 +749,7 @@ class Song:
                                         .format(idx, first_text_idx, text))
                             line_lyrics += node.text
                         elif first_text_idx is None:
-                            text = r"\phantom{{|{}|}}".format("天")
+                            text = r"\phantom{{{}}}".format("天")
                             line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
                                     .format(idx, text))
                             first_text_idx = idx
