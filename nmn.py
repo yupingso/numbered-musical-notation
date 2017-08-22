@@ -516,6 +516,12 @@ class Song:
         line_node_idx_prev = -1
         sections = []
         for time, start_beat, notes in self.melody:
+            if time[0] is None:
+                time_duration = None
+            elif time[1] == 4:
+                time_duration = Fraction(time[0])
+            else:
+                time_duration = Fraction(time[0], 2)
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
@@ -525,9 +531,12 @@ class Song:
                     section_added = True
                 # new line
                 if not note.tie[0] and not line_added and lyrics_idx in split_lines:
-                    sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
-                    line_added = True
-                    line_node_idx_prev = -1
+                    if sections[-1][1] and note.name == 0 and (beat + note.duration) % time_duration == 0:
+                        pass
+                    else:
+                        sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
+                        line_added = True
+                        line_node_idx_prev = -1
                 line = sections[-1][1][-1]
                 nodes, bars, ties = line
                 # new bar
