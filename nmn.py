@@ -690,7 +690,7 @@ class Song:
                 line_output.append(r"""\tikzstyle{every node}=[inner sep=0pt]
 \tikzstyle{dot}=[circle,fill=white,inner sep=0pt,text width=1.5pt]
 \tikzstyle{lyrics}=[node distance=15pt]
-\tikzstyle{tie}=[line width=0.5pt,bend left=45,max distance=10pt]
+\tikzstyle{tie}=[line width=0.5pt,bend left=45,min distance=4pt,max distance=5pt]
 \tikzstyle{underline}=[line width=0.5pt]
 \tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
@@ -793,7 +793,7 @@ class Song:
                 line_output.append(r"\end{tikzpicture}")
                 line_output.append("")
                 assert line_output[0] == r"\begin{tikzpicture}" and pos > 0
-                line_output[0] = line_output[0] + "[xscale={}]".format(105 / pos)
+                line_output[0] = line_output[0] + "[xscale={}]".format(115 / pos)
 
                 line_file = line_file_format.format(chr(ord('a') + i), j)
                 with open(line_file, "w") as f:
