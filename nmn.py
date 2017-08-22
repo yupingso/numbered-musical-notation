@@ -190,10 +190,14 @@ class Note:
             beat = end_beat
 
         for i, subnote in enumerate(subnotes):
-            if i > 0:
-                subnote.tie[0] = True
-            if i < len(subnotes) - 1:
-                subnote.tie[1] = True
+            if note.name == 0:
+                subnote.tie[0] = False
+                subnote.tie[1] = False
+            else:
+                if i > 0:
+                    subnote.tie[0] = True
+                if i < len(subnotes) - 1:
+                    subnote.tie[1] = True
         
         if _DEBUG:
             with open("log/split_note.log", "w") as f:
