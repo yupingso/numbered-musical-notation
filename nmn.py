@@ -738,20 +738,20 @@ class Song:
                             line_output.append(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
                                     .format(idx, node_distance))
                         # text
+                        height = -17
                         if node.text:
+                            if node.text in '每悔':
+                                height += 1
                             text = "{0}{1}{0}".format("\phantom{|}", node.text)
                             if first_text_idx is None:
-                                line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
-                                        .format(idx, text))
                                 first_text_idx = idx
-                            else:
-                                line_output.append(r"\node[lyrics] at (a{} |- t{}) {{{}}};" \
-                                        .format(idx, first_text_idx, text))
+                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};"
+                                               .format(idx, text, height))
                             line_lyrics += node.text
                         elif first_text_idx is None:
                             text = r"\phantom{{{}}}".format("天")
-                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,-17pt)$) {{{1}}};" \
-                                    .format(idx, text))
+                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};" \
+                                    .format(idx, text, height))
                             first_text_idx = idx
                         pos += 10
 
