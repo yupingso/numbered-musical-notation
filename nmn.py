@@ -558,7 +558,7 @@ class Song:
                     if note.name:
                         if lyrics_idx >= num_words:
                             raise ValueError("#notes > {} words".format(num_words))
-                        if all_lyrics[lyrics_idx] != '~' and note.name:
+                        if all_lyrics[lyrics_idx] != '~':
                             node.text = all_lyrics[lyrics_idx]
                         lyrics_idx += 1
                         section_added, line_added = False, False
