@@ -515,6 +515,17 @@ class Song:
         all_lyrics = ''.join([''.join(section[1]) for section in self.lyrics])
         num_words = len(all_lyrics)     # contains "~"
 
+        # calculate the starting and ending index of slurs
+        slur_lyrics_idx = {}
+        prev_idx = None
+        for idx, text in enumerate(all_lyrics):
+            if text != '~':
+                if prev_idx is not None and idx != prev_idx + 1:
+                    slur_lyrics_idx[prev_idx] = idx - 1
+                prev_idx = idx
+        if prev_idx is not None:
+            slur_lyrics_idx[prev_idx] = num_words - 1
+
         # split melody
         lyrics_idx = 0
         section_added, line_added = False, False    # whether these are added for this lyrics_idx
