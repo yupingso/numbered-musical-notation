@@ -508,6 +508,8 @@ class Song:
         for i, (tag, lyrics) in enumerate(self.lyrics):
             split_sections[sum_len] = tag
             for j, s in enumerate(lyrics):
+                if s.startswith('~'):
+                    raise ValueError("a line of lyrics cannot start with '~' ({})".format(s))
                 split_lines.append(sum_len)
                 sum_len += len(s)
         all_lyrics = ''.join([''.join(section[1]) for section in self.lyrics])
