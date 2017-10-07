@@ -495,7 +495,7 @@ class Song:
         """Return a list of sections.
         
         section: (tag, lines)
-        line: [nodes, list of bars, list of ties]
+        line: [nodes, list of bars, list of ties, list of slurs]
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
@@ -528,6 +528,7 @@ class Song:
 
         # split melody
         lyrics_idx = 0
+        lyrics_idx_prev = None
         section_added, line_added = False, False    # whether these are added for this lyrics_idx
         line_node_idx = 0
         line_node_idx_prev = -1
@@ -551,11 +552,11 @@ class Song:
                     if sections[-1][1] and note.name == 0 and (beat + note.duration) % time_duration == 0:
                         pass
                     else:
-                        sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
+                        sections[-1][1].append([[], [], [], []])    # (nodes, bars, ties, slurs)
                         line_added = True
                         line_node_idx_prev = -1
                 line = sections[-1][1][-1]
-                nodes, bars, ties = line
+                nodes, bars, ties, slurs = line
                 # new bar
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
@@ -599,7 +600,7 @@ class Song:
         """Group underlines shared by contiguous notes, and find triplets by modifying sections in place.
         
         section: (tag, lines)
-        line: [nodes, bars, ties, underlines_list, triplets]
+        line: [nodes, bars, ties, slurs, underlines_list, triplets]
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         underlines_list: list of underlines
@@ -609,7 +610,7 @@ class Song:
         """
         for tag, lines in sections:
             for line in lines:
-                nodes, bars, ties = line
+                nodes, bars, ties, slurs = line
                 underlines_list = [None]
                 triplets = []
                 triplet_duration = None
@@ -678,7 +679,7 @@ class Song:
             # new section
             line_count = 0
             
-            for j, (nodes, bars, ties, underlines_list, triplets) in enumerate(lines):
+            for j, (nodes, bars, ties, slurs, underlines_list, triplets) in enumerate(lines):
                 # new page
                 if line_count % 2 == 0:
                     page_count += 1
@@ -824,7 +825,7 @@ class Song:
     def print(self, sections):
         for tag, lines in sections:
             print("{:=^80}".format(' ' + tag + ' '))
-            for nodes, bars, ties, underlines_list, triplets in lines:
+            for nodes, bars, ties, slurs, underlines_list, triplets in lines:
                 print("-" * 50)
                 #for k, note in enumerate(notes):
                 #    print("<note {:02d}> {}".format(k, note))
