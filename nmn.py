@@ -2,7 +2,6 @@ import sys
 import os
 import re
 from fractions import Fraction
-import bisect
 
 
 class Note:
@@ -22,7 +21,7 @@ class Note:
         tie[0] = True: tied with the previous Note
         tie[1] = True: tied with the next Note
     """
-    
+
     possible_ends = {}
 
     def __init__(self, acc, name, octave=0, duration=Fraction(1), dashes=0, underlines=0, dots=0, tie=(False, False)):
@@ -116,7 +115,7 @@ class Note:
         note.lines, note.dots = None, None      # ignore lines and dots
         duration = note.duration
         p = time[2].bit_length() - 3
-        
+
         if time[1] == 4:
             unit = (1 << p)
             if time[0] == 2:
@@ -139,7 +138,7 @@ class Note:
                 n_unit, m_unit = 2, 1
             else:
                 raise ValueError("unknown time[0] {}".format(time[0]))
-        
+
         cls.init_possible_ends(n, m)
         ends = cls.possible_ends[(n, m)]
         cls.init_possible_ends(n_unit, m_unit)
@@ -148,7 +147,7 @@ class Note:
         subnotes = []
         beat = start_beat
         DEBUG_LOG.append("note {}".format(note))
-        
+
         while beat < start_beat + duration:
             start = int(beat * (1 << p))
             subend = None
@@ -198,7 +197,7 @@ class Note:
                     subnote.tie[0] = True
                 if i < len(subnotes) - 1:
                     subnote.tie[1] = True
-        
+
         if _DEBUG:
             with open("log/split_note.log", "w") as f:
                 f.write("\n".join(DEBUG_LOG))
@@ -209,7 +208,7 @@ class Note:
         """Group notes of the form '1_ 2_ ~ 2_ 3_'."""
         for subnote in subnotes:
             pass
-    
+
     def __str__(self):
         acc_str = {-1: 'b', 0: '%', 1: '#', None: ' '}
         oct_str = {-2: ',,', -1: ',', 0: '', 1: "'", 2: "''"}
@@ -324,7 +323,7 @@ def parse_pitch(key, s):
 
 class Song:
     """Member variables
-    
+
     key: (name, accidental, 8-tuple)
         tuple[i] indicates whether i is flat or sharp.
         For example, key = (2,  0, (?, 1,  0,  0,  1,  0,  0,  0)) stands for D major.
@@ -343,7 +342,7 @@ class Song:
              + "<first_bar> {}\n".format(self.first_bar_duration) \
              + "<melody> {}\n".format(self.melody) \
              + "<lyrics> {}".format(self.lyrics)
-    
+
     def print(self):
         print("<key> {}".format(self.key))
         for time, notes in self.melody:
@@ -355,7 +354,7 @@ class Song:
 
     def append_time_signature(self, time, s):
         """Append bars to self.melody.
-        
+
         Split s into bars by '|'.
         If the duration of a bar exceeds time, split it further based on whether it is the first bar.
         """
@@ -363,7 +362,7 @@ class Song:
             raise ValueError("unknown <time>")
         if not s:
             return
-        
+
         pattern_pitch = r"[#$%]?[0-7a-zA-Z][',]*"
         pattern_pitches = r"\[(?:{})+\]".format(pattern_pitch)
         pattern_duration = r"(?:[_=]+|-*)\.*(?:/3)?"
@@ -373,10 +372,10 @@ class Song:
         for i, bar in enumerate(bars):
             if not bar:
                 continue
-            
+
             bar_duration = Fraction(0)
             note_list = []
-            
+
             # parse notes in bar
             notes = re.findall(pattern, bar)
             if ''.join([''.join(note) for note in notes]) != bar:
@@ -404,7 +403,7 @@ class Song:
                     duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
                 pitches = pitches.lstrip('[').rstrip(']')
                 pitches = re.findall(r"({})".format(pattern_pitch), pitches)
-                
+
                 for k, pitch in enumerate(pitches):
                     acc, name, octave = parse_pitch(self.key, pitch)
                     tie = [tie0, tie1]
@@ -417,7 +416,7 @@ class Song:
                     note_list.append(note)
                     bar_duration += duration
             assert note_list
-            
+
             # append to self.melody
             if time[0] is None:
                 time_duration = bar_duration
@@ -493,14 +492,14 @@ class Song:
 
     def merge_melody_lyrics(self, _DEBUG=False):
         """Return a list of sections.
-        
+
         section: (tag, lines)
         line: [nodes, list of bars, list of ties]
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
         DEBUG_LOG = []
-        
+
         # calculate split indices according to self.lyrics
         sum_len = 0
         split_sections = {}
@@ -575,16 +574,16 @@ class Song:
                 beat += note.duration
         if lyrics_idx != num_words:
             raise ValueError("{} notes != {} words".format(lyrics_idx, num_words))
-        
+
         if _DEBUG:
             with open("log/merge.log", "w") as f:
                 f.write("\n".join(DEBUG_LOG))
-        
+
         return sections
-    
+
     def group_underlines(self, sections):
         """Group underlines shared by contiguous notes, and find triplets by modifying sections in place.
-        
+
         section: (tag, lines)
         line: [nodes, bars, ties, underlines_list, triplets]
         bar: (time, start_beat, node indices)
@@ -657,14 +656,14 @@ class Song:
         slides_output = []
         line_file_format = os.path.join(output_dir, "line-{}{:02d}.tex")
         page_count = 0
-        
+
         sections = self.merge_melody_lyrics()
         self.group_underlines(sections)
-        
+
         for i, (tag, lines) in enumerate(sections):
             # new section
             line_count = 0
-            
+
             for j, (nodes, bars, ties, underlines_list, triplets) in enumerate(lines):
                 # new page
                 if line_count % 2 == 0:
@@ -682,7 +681,7 @@ class Song:
                     else:
                         slides_output.append(r"\begin{nmnblank}")
                         slides_output.append(r"\end{nmnblank}")
-                
+
                 # new line
                 line_lyrics = ""
                 line_output = []
@@ -696,7 +695,7 @@ class Song:
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
                 line_output.append("\n\n% nodes")
                 line_output.append(r"\node at (0pt, 12pt) {}; % for space adjustment")
-                
+
                 pos = 0
                 first_text_idx = None
                 for k, (time, start_beat, idx_list) in enumerate(bars):
@@ -788,7 +787,7 @@ class Song:
                             .format(triplet[0], dis0))
                     line_output.append(r"\draw[tie1] (a{}.north) +(0,{}pt) to ($(tri.east)+(+1pt,0)$);" \
                             .format(triplet[2], dis0))
-                
+
                 line_output.append("")
                 line_output.append(r"\end{tikzpicture}")
                 line_output.append("")
@@ -799,12 +798,12 @@ class Song:
                 with open(line_file, "w") as f:
                     f.write("\n".join(line_output))
                 line_count += 1
-                
+
                 slides_output.append("\n% {}".format(line_lyrics))
                 slides_output.append(r"\begin{nmnline}")
                 slides_output.append(r"\input{{{}}}".format(line_file.split('/')[-1]))
                 slides_output.append(r"\end{nmnline}")
-        
+
         with open(slides_file, "w") as f:
             f.write("\n".join(slides_output))
 
@@ -923,7 +922,7 @@ def parse_time(s):
 def load_song(melody_file, lyrics_file=None):
     """Load numbered musical notation and lyrics, and return Song."""
     song = Song()
-    
+
     # melody
     with open(melody_file) as f:
         time = None
@@ -967,7 +966,7 @@ def load_song(melody_file, lyrics_file=None):
                 if not song.lyrics:
                     raise ValueError("no <tag> specified before {}".format(line))
                 song.lyrics[-1][1].append(s)
-    
+
     return song
 
 
