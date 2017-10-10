@@ -14,16 +14,16 @@ def test(input_dir, to_tex=False):
         input_dir = os.path.join(cur_dir, 'input')
     melody_file = os.path.join(input_dir, 'melody.txt')
     lyrics_file = os.path.join(input_dir, 'lyrics.txt')
-    
+
     song = nmn.load_song(melody_file, lyrics_file)
-    
+
     if to_tex:
         song.to_tex_tikzpicture(os.path.join(cur_dir, 'latex/'))
     else:
         sections = song.merge_melody_lyrics(_DEBUG=True)
         song.group_underlines(sections)
         song.print(sections)
-    
+
 
 if __name__ == '__main__':
     input_dir = None
