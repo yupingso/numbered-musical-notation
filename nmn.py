@@ -949,7 +949,7 @@ def load_song(melody_file, lyrics_file=None):
     song.try_split_notes()
 
     # lyrics
-    with open(lyrics_file) as f:
+    with open(lyrics_file, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             s = line
