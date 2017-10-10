@@ -1,0 +1,3 @@
+<key> D
+<time> 4/4
+d e #e f
