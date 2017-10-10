@@ -91,9 +91,10 @@ ENV/
 
 # others
 *~
-input/
-latex/slides.tex
-latex/line*.tex
-latex/*.aux
-latex/*.pdf
-run.sh
+/.idea/
+/input/
+/latex/slides.tex
+/latex/line*.tex
+/latex/*.aux
+/latex/*.pdf
+/run.sh
