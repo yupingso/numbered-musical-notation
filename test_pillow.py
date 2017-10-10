@@ -1,10 +1,10 @@
-from math import asin, pi as PI, sin
+from math import pi as PI, sin, cos, asin
 from pathlib import Path
 
 from PIL import Image, ImageFont, ImageDraw
 
 
-font_path = Path('../../NMN/latex/fonts').resolve()
+font_path = Path('latex/fonts').resolve()
 text_font_file = font_path / 'kaiu.ttf'
 en_font_file = font_path / 'times.ttf'
 enbd_font_file = font_path / 'timesbd.ttf'
@@ -46,6 +46,48 @@ if __name__ == '__main__':
     def draw_circle(draw, x, y, r):
         draw.ellipse(((x - r, y - r), (x + r, y + r)), fill=(255, 255, 255))
 
+    def draw_arc(draw, bbox, start, end, fill, width=1, segments=100):
+        """Hack that looks similar to PIL's draw.arc(), but can specify a line width."""
+        if len(bbox) == 2:
+            bbox = (bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1])
+
+        # radians
+        start *= PI / 180
+        end *= PI / 180
+
+        # angle step
+        da = (end - start) / segments
+
+        # shift end points with half a segment angle
+        start -= da / 2
+        end -= da / 2
+
+        # ellips radii
+        rx = (bbox[2] - bbox[0]) / 2
+        ry = (bbox[3] - bbox[1]) / 2
+
+        # box centre
+        cx = bbox[0] + rx
+        cy = bbox[1] + ry
+
+        # segment length
+        l = (rx + ry) * da / 2.0
+
+        for i in range(segments):
+
+            # angle centre
+            a = start + (i+0.5) * da
+
+            # x,y centre
+            x = cx + cos(a) * rx
+            y = cy + sin(a) * ry
+
+            # derivatives
+            dx = -sin(a) * rx / (rx + ry)
+            dy = cos(a) * ry / (rx + ry)
+
+            draw.line([(x - dx * l, y - dy * l), (x + dx * l, y + dy * l)], fill=fill, width=width)
+
     def draw_tie(draw, x1, x2, y, h):
         """Draw tie or slur from ``(x1, y)`` to ``(x2, y)`` with height ``h``."""
         d = x2 - x1
@@ -55,8 +97,8 @@ if __name__ == '__main__':
         x_c = (x1 + x2) / 2
         y_c = y - h + r
         # https://stackoverflow.com/questions/7070912/creating-an-arc-with-a-given-thickness-using-pils-imagedraw
-        draw.arc(((x_c - r, y_c - r), (x_c + r, y_c + r)),
-                 270 - angle, 270 + angle, fill=(255, 255, 255))
+        draw_arc(draw, ((x_c - r, y_c - r), (x_c + r, y_c + r)),
+                 270 - angle, 270 + angle, fill=(255, 255, 255), width=4, segments=1000)
 
     # melody
     y_m = 295
@@ -76,7 +118,10 @@ if __name__ == '__main__':
     draw_lyrics(draw, 155+150, 500, '個')
     draw_lyrics(draw, 155+300, 500, '狂')
     draw_lyrics(draw, 155+450, 500, '風')
-    sharp_im = Image.open('sharp.png').resize((40, 40))
+    sharp_im = Image.open('figure/sharp.png').resize((40, 40))
     # image.paste(sharp_im, mask=None)  # TODO
-    image.save('test.png')
-    print('Save to test.png')
+
+    # save to file
+    filename = Path.home() / 'htdocs' / 'test.png'
+    image.save(str(filename))
+    print('Save to {}'.format(filename))
