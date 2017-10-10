@@ -1,8 +1,10 @@
 #! /usr/bin/env python3
 
-import nmn
 import os
 import sys
+
+import nmn
+
 
 def test(input_dir, to_tex=False):
     cur_dir = os.path.dirname(os.path.abspath(__file__))
