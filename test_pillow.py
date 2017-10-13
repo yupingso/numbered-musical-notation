@@ -49,7 +49,7 @@ def test_pillow():
     def draw_circle(draw, x, y, r):
         draw.ellipse(((x - r, y - r), (x + r, y + r)), fill=(255, 255, 255))
 
-    def draw_arc(draw, bbox, start, end, fill, width=1, segments=100):
+    def draw_arc_bad(draw, bbox, start, end, fill, width=1, segments=100):
         """Draw arc with line width specified."""
         if len(bbox) == 2:
             bbox = (bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1])
@@ -91,7 +91,7 @@ def test_pillow():
 
             draw.line([(x - dx * l, y - dy * l), (x + dx * l, y + dy * l)], fill=fill, width=width)
 
-    def draw_tie(draw, x1, x2, y, h):
+    def draw_tie_bad(draw, x1, x2, y, h):
         """Draw tie or slur from ``(x1, y)`` to ``(x2, y)`` with height ``h``."""
         d = x2 - x1
         r = (h * h + d * d / 4) / (h * 2)
@@ -99,10 +99,10 @@ def test_pillow():
         angle = asin(d / r / 2) * (180 / PI)
         x_c = (x1 + x2) / 2
         y_c = y - h + r
-        draw_arc(draw, ((x_c - r, y_c - r), (x_c + r, y_c + r)),
-                 270 - angle, 270 + angle, fill=(255, 255, 255), width=4, segments=100)
+        draw_arc_bad(draw, ((x_c - r, y_c - r), (x_c + r, y_c + r)),
+                 270 - angle, 270 + angle, fill=(255, 255, 255), width=6, segments=10)
 
-    def draw_tie_opencv(image, x1, x2, y, h, color=(255, 100, 255)):
+    def draw_tie(image, x1, x2, y, h, color=(255, 255, 255)):
         # convert
         img = np.array(np.asarray(image)[:, :, ::-1])
 
@@ -115,7 +115,7 @@ def test_pillow():
         y_c = y - h + r
         270 - angle, 270 + angle
         cv2.ellipse(img, (int(x_c), int(y_c)), (int(r), int(r)), 0,
-                    270 - angle, 270 + angle, color, thickness=4)
+                    270 - angle, 270 + angle, color, thickness=5, lineType=cv2.LINE_AA)
 
         # convert back
         image = Image.fromarray(img[:, :, ::-1], 'RGB')
@@ -134,8 +134,8 @@ def test_pillow():
     draw.line(((155 - size_m[0] / 2, y_m + size_m[1] / 2 + 20),
                (155+150 + size_m[0] / 2, y_m + size_m[1] / 2 + 20)), width=8)
     draw_circle(draw, 155, y_m + size_m[1] / 2 + 60, 8)
-    draw_tie(draw, 155, 155 + 150, y_m - size_m[1] / 2, 30)
-    image, draw = draw_tie_opencv(image, 155 + 300, 155 + 450, y_m - size_m[1] / 2, 30)
+    image, draw = draw_tie(image, 155, 155 + 150, y_m - size_m[1] / 2, 30)
+    image, draw = draw_tie(image, 155 + 300, 155 + 450, y_m - size_m[1] / 2, 30)
 
 
     # lyrics
