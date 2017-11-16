@@ -198,7 +198,7 @@ class Note:
                 if i < len(subnotes) - 1:
                     subnote.tie[1] = True
 
-        if _DEBUG:
+        if _debug:
             with open("log/split_note.log", "w") as f:
                 f.write("\n".join(debug_log))
         return subnotes
