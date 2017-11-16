@@ -20,7 +20,7 @@ def test(input_dir, to_tex=False):
     if to_tex:
         song.to_tex_tikzpicture(os.path.join(cur_dir, 'latex/'))
     else:
-        sections = song.merge_melody_lyrics(_DEBUG=True)
+        sections = song.merge_melody_lyrics(_debug=True)
         song.group_underlines(sections)
         song.print(sections)
 
