@@ -211,7 +211,6 @@ class Note:
                 acc_str[self.acc], self.name, oct_str[self.octave], str(self.duration), self.tie)
 
 
-
 class NodeType(Enum):
     """Type of node."""
 
@@ -335,8 +334,7 @@ class Song:
 
     def __str__(self):
         lines = [
-            '<key> {}, <time> {}'.format(self.key, self.time),
-            '<first_bar> {}'.format(self.first_bar_duration),
+            '<key> {}'.format(self.key),
             '<melody> {}'.format(self.melody),
             '<lyrics> {}'.format(self.lyrics),
         ]
