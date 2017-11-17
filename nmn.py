@@ -966,7 +966,3 @@ def load_song(melody_file, lyrics_file=None):
                 song.lyrics[-1][1].append(s)
 
     return song
-
-
-if __name__ == '__main__':
-    sys.exit()
