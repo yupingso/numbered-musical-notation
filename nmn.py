@@ -367,7 +367,7 @@ class Song:
         pattern_pitch = r"[#$%]?[0-7a-zA-Z][',]*"
         pattern_pitches = r'\[(?:{})+\]'.format(pattern_pitch)
         pattern_duration = r'(?:[_=]+|-*)\.*(?:/3)?'
-        pattern = '(~?)' + r'({}|{})({})'.format(pattern_pitch, pattern_pitches, pattern_duration) + '(~?)'
+        pattern = '(~?)' + '({}|{})({})'.format(pattern_pitch, pattern_pitches, pattern_duration) + '(~?)'
 
         bars = s.split('|')
         for i, bar in enumerate(bars):
@@ -385,25 +385,28 @@ class Song:
                 tie0, tie1 = (tie0 != ''), (tie1 != '')
                 dots = duration.count('.')
                 dashes = duration.count('-')
-                unders = duration.count('=') * 2 + duration.count('_')
-                if dashes > 0 and unders > 0:
+                underlines = duration.count('=') * 2 + duration.count('_')
+                if dashes > 0 and underlines > 0:
                     raise ValueError('wrong format for {}'.format(notes))
                 triplet = Fraction(1)
                 if '/3' in duration:
                     triplet = Fraction(2, 3)
                 if time.lower:
                     if pitches.startswith('[') and pitches.endswith(']'):
-                        duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                        duration = (Fraction(dashes + 1, 1 << underlines)
+                                    * (Fraction(2) - Fraction(1, 1 << dots)) * triplet)
                     else:
-                        if dots or unders or (triplet != 1):
+                        if dots or underlines or (triplet != 1):
                             raise ValueError('dots, underlines and triplets are not allowed'
-                                             ' without brackets in <time> {}/{} hyphen={}'.format(*time))
+                                             ' without brackets in <time> {}/{} hyphen={}'
+                                             .format(*time))
                         duration = Fraction(dashes + 1, time.hyphen // 4)
-                        dashes, unders, dots = None, None, None
+                        dashes, underlines, dots = None, None, None
                 else:
-                    duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                    duration = (Fraction(dashes + 1, 1 << underlines)
+                                * (Fraction(2) - Fraction(1, 1 << dots)) * triplet)
                 pitches = pitches.lstrip('[').rstrip(']')
-                pitches = re.findall(r'({})'.format(pattern_pitch), pitches)
+                pitches = re.findall('({})'.format(pattern_pitch), pitches)
 
                 for k, pitch in enumerate(pitches):
                     acc, name, octave = parse_pitch(self.key, pitch)
@@ -413,7 +416,7 @@ class Song:
                     if k < len(pitches) - 1:
                         tie[1] = False
                     # new Note
-                    note = Note(acc, name, octave, duration, dashes, unders, dots, tie)
+                    note = Note(acc, name, octave, duration, dashes, underlines, dots, tie)
                     note_list.append(note)
                     bar_duration += duration
             assert note_list
