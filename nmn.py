@@ -3,6 +3,10 @@ import os
 import re
 from fractions import Fraction
 from enum import Enum
+from collections import namedtuple
+
+
+Time = namedtuple('Time', ['upper', 'lower', 'hyphen'])
 
 
 class Note:
@@ -109,36 +113,36 @@ class Note:
     @classmethod
     def split_note(cls, time, start_beat, note, _debug=False):
         debug_log = []
-        if not time[2]:
+        if not time.hyphen:
             raise ValueError('no need to split note for time {}'.format(time))
-        if time[0] is None:
-            raise ValueError('cannot split note for time ?/{}'.format(time[1]))
+        if time.upper is None:
+            raise ValueError('cannot split note for time ?/{}'.format(time.lower))
         note.lines, note.dots = None, None      # ignore lines and dots
         duration = note.duration
-        p = time[2].bit_length() - 3
+        p = time.hyphen.bit_length() - 3
 
-        if time[1] == 4:
+        if time.lower == 4:
             unit = (1 << p)
-            if time[0] == 2:
+            if time.upper == 2:
                 n, m = p + 1, 1
-            elif time[0] == 3:
+            elif time.upper == 3:
                 n, m = p, 3
-            elif time[0] == 4:
+            elif time.upper == 4:
                 n, m = p + 2, 1
             else:
-                raise ValueError('unknown time[0] {}'.format(time[0]))
-            n_unit, m_unit = 0, time[0]
+                raise ValueError('unknown time.upper {}'.format(time.upper))
+            n_unit, m_unit = 0, time.upper
         else:
             unit = int(Fraction(3, 2) * (1 << p))
             n, m = p - 1, 3
-            if time[0] == 6:
+            if time.upper == 6:
                 n_unit, m_unit = 0, 2
-            elif time[0] == 9:
+            elif time.upper == 9:
                 n_unit, m_unit = 0, 3
-            elif time[0] == 12:
+            elif time.upper == 12:
                 n_unit, m_unit = 2, 1
             else:
-                raise ValueError('unknown time[0] {}'.format(time[0]))
+                raise ValueError('unknown time.upper {}'.format(time.upper))
 
         cls.init_possible_ends(n, m)
         ends = cls.possible_ends[(n, m)]
@@ -158,7 +162,7 @@ class Note:
                     e = e_rel * unit
                     if e > end:
                         break
-                    if time[1] == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
+                    if time.lower == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
                         continue
                     subend = e
                     debug_log.append('      E {}'.format(Fraction(subend - start, 1 << p)))
@@ -169,8 +173,8 @@ class Note:
                 if e > end:
                     break
                 length = e - start
-                if (time[1] == 4 and length >= unit * 2) or \
-                   (time[1] == 8 and length > unit):
+                if (time.lower == 4 and length >= unit * 2) or \
+                   (time.lower == 8 and length > unit):
                     break
                 debug_log.append('      e {}'.format(Fraction(length, 1 << p)))
                 if subend is None or e > subend:
@@ -387,14 +391,14 @@ class Song:
                 triplet = Fraction(1)
                 if '/3' in duration:
                     triplet = Fraction(2, 3)
-                if time[2]:
+                if time.lower:
                     if pitches.startswith('[') and pitches.endswith(']'):
                         duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
                     else:
                         if dots or unders or (triplet != 1):
                             raise ValueError('dots, underlines and triplets are not allowed'
                                              ' without brackets in <time> {}/{} hyphen={}'.format(*time))
-                        duration = Fraction(dashes + 1, time[2] // 4)
+                        duration = Fraction(dashes + 1, time.hyphen // 4)
                         dashes, unders, dots = None, None, None
                 else:
                     duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
@@ -415,12 +419,12 @@ class Song:
             assert note_list
 
             # append to self.melody
-            if time[0] is None:
+            if time.upper is None:
                 time_duration = bar_duration
-            elif time[1] == 4:
-                time_duration = Fraction(time[0])
+            elif time.lower == 4:
+                time_duration = Fraction(time.upper)
             else:
-                time_duration = Fraction(time[0], 2)
+                time_duration = Fraction(time.upper, 2)
             if i == 0 and len(bars) > 1:        # first bar but not last
                 beat = (time_duration - (bar_duration % time_duration)) % time_duration
             else:
@@ -435,9 +439,9 @@ class Song:
                     if beat == 0:
                         self.melody.append((time, beat, []))    # new bar
                     sub_duration = min(remaining_duration, time_duration - beat)
-                    if not time[2] and sub_duration != remaining_duration:
+                    if not time.hyphen and sub_duration != remaining_duration:
                         raise ValueError('{} goes beyond one bar with time {}/{}'
-                                         .format(note, time[0], time[1]))
+                                         .format(note, time.upper, time.lower))
                     sub_note = note.copy()
                     sub_note.duration = sub_duration
                     if not first:
@@ -474,7 +478,7 @@ class Song:
         For these sub-notes, perform a 2nd-staged grouping.
         """
         for time, start_beat, notes in self.melody:
-            if not time[2]:
+            if not time.hyphen:
                 continue
             subnotes = []
             beat = start_beat
@@ -527,12 +531,12 @@ class Song:
         line_node_idx_prev = -1
         sections = []
         for time, start_beat, notes in self.melody:
-            if time[0] is None:
+            if time.upper is None:
                 time_duration = None
-            elif time[1] == 4:
-                time_duration = Fraction(time[0])
+            elif time.lower == 4:
+                time_duration = Fraction(time.upper)
             else:
-                time_duration = Fraction(time[0], 2)
+                time_duration = Fraction(time.upper, 2)
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
@@ -618,8 +622,8 @@ class Song:
                         if node.type != NodeType.NOTE:
                             continue
                         # triplet
-                        if (time[1] == 4 and beat % Fraction(1) == 0) or \
-                           (time[1] == 8 and beat % Fraction(3, 2) == 0):
+                        if (time.lower == 4 and beat % Fraction(1) == 0) or \
+                           (time.lower == 8 and beat % Fraction(3, 2) == 0):
                             new_group = True
                             triplet_duration = None
                         else:
@@ -813,7 +817,7 @@ class Song:
             for nodes, bars, ties, slurs, underlines_list, triplets in lines:
                 print('-' * 50)
                 for time, start_beat, a in bars:
-                    print('<time> {}/{} beat={}'.format(time[0], time[1], start_beat))
+                    print('<time> {}/{} beat={}'.format(time.upper, time.lower, start_beat))
                     for idx in a:
                         print('    <node {:02d}> {}'.format(idx, nodes[idx]))
                 print('<ties> {}'.format(ties))
@@ -914,7 +918,7 @@ def parse_time(s):
         raise ValueError('unrecognizable <time> {}/{}'.format(a, b))
     if hyphen and hyphen < b:
         raise ValueError('hyphen must >= {} for <time> {}/{}'.format(b, a, b))
-    return a, b, hyphen
+    return Time(a, b, hyphen)
 
 
 def load_song(melody_file, lyrics_file=None):
