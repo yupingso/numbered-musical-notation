@@ -2,7 +2,11 @@ import sys
 import os
 import re
 from fractions import Fraction
-import bisect
+from enum import Enum
+from collections import namedtuple
+
+
+Time = namedtuple('Time', ['upper', 'lower', 'hyphen'])
 
 
 class Note:
@@ -22,7 +26,7 @@ class Note:
         tie[0] = True: tied with the previous Note
         tie[1] = True: tied with the next Note
     """
-    
+
     possible_ends = {}
 
     def __init__(self, acc, name, octave=0, duration=Fraction(1), dashes=0, underlines=0, dots=0, tie=(False, False)):
@@ -107,39 +111,39 @@ class Note:
         cls.possible_ends[(n, m)] = ends
 
     @classmethod
-    def split_note(cls, time, start_beat, note, _DEBUG=False):
-        DEBUG_LOG = []
-        if not time[2]:
-            raise ValueError("no need to split note for time {}".format(time))
-        if time[0] is None:
-            raise ValueError("cannot split note for time ?/{}".format(time[1]))
+    def split_note(cls, time, start_beat, note, _debug=False):
+        debug_log = []
+        if not time.hyphen:
+            raise ValueError('no need to split note for time {}'.format(time))
+        if time.upper is None:
+            raise ValueError('cannot split note for time ?/{}'.format(time.lower))
         note.lines, note.dots = None, None      # ignore lines and dots
         duration = note.duration
-        p = time[2].bit_length() - 3
-        
-        if time[1] == 4:
+        p = time.hyphen.bit_length() - 3
+
+        if time.lower == 4:
             unit = (1 << p)
-            if time[0] == 2:
+            if time.upper == 2:
                 n, m = p + 1, 1
-            elif time[0] == 3:
+            elif time.upper == 3:
                 n, m = p, 3
-            elif time[0] == 4:
+            elif time.upper == 4:
                 n, m = p + 2, 1
             else:
-                raise ValueError("unknown time[0] {}".format(time[0]))
-            n_unit, m_unit = 0, time[0]
+                raise ValueError('unknown time.upper {}'.format(time.upper))
+            n_unit, m_unit = 0, time.upper
         else:
             unit = int(Fraction(3, 2) * (1 << p))
             n, m = p - 1, 3
-            if time[0] == 6:
+            if time.upper == 6:
                 n_unit, m_unit = 0, 2
-            elif time[0] == 9:
+            elif time.upper == 9:
                 n_unit, m_unit = 0, 3
-            elif time[0] == 12:
+            elif time.upper == 12:
                 n_unit, m_unit = 2, 1
             else:
-                raise ValueError("unknown time[0] {}".format(time[0]))
-        
+                raise ValueError('unknown time.upper {}'.format(time.upper))
+
         cls.init_possible_ends(n, m)
         ends = cls.possible_ends[(n, m)]
         cls.init_possible_ends(n_unit, m_unit)
@@ -147,8 +151,8 @@ class Note:
         end = int((start_beat + duration) * (1 << p))
         subnotes = []
         beat = start_beat
-        DEBUG_LOG.append("note {}".format(note))
-        
+        debug_log.append('note {}'.format(note))
+
         while beat < start_beat + duration:
             start = int(beat * (1 << p))
             subend = None
@@ -158,25 +162,25 @@ class Note:
                     e = e_rel * unit
                     if e > end:
                         break
-                    if time[1] == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
+                    if time.lower == 8 and e != start + unit:  # only a unit is allowed for <time> X/8
                         continue
                     subend = e
-                    DEBUG_LOG.append("      E {}".format(Fraction(subend - start, 1 << p)))
-            # contains "dots"
+                    debug_log.append('      E {}'.format(Fraction(subend - start, 1 << p)))
+            # contains 'dots'
             base = start - start % (1 << n)
             for e_rel in ends[start % (1 << n)]:
                 e = base + e_rel
                 if e > end:
                     break
                 length = e - start
-                if (time[1] == 4 and length >= unit * 2) or \
-                   (time[1] == 8 and length > unit):
+                if (time.lower == 4 and length >= unit * 2) or \
+                   (time.lower == 8 and length > unit):
                     break
-                DEBUG_LOG.append("      e {}".format(Fraction(length, 1 << p)))
+                debug_log.append('      e {}'.format(Fraction(length, 1 << p)))
                 if subend is None or e > subend:
                     subend = e
             if subend is None:
-                raise ValueError("cannot find ending point in ({}, {}]".format(start, end))
+                raise ValueError('cannot find ending point in ({}, {}]'.format(start, end))
             end_beat = Fraction(subend, 1 << p)
             subnote = note.copy()
             subnote.duration = end_beat - beat
@@ -186,7 +190,7 @@ class Note:
             else:
                 subnote.tie[0] = True
             subnotes.append(subnote)
-            DEBUG_LOG.append("   > {}".format(subnote))
+            debug_log.append('   > {}'.format(subnote))
             beat = end_beat
 
         for i, subnote in enumerate(subnotes):
@@ -198,37 +202,31 @@ class Note:
                     subnote.tie[0] = True
                 if i < len(subnotes) - 1:
                     subnote.tie[1] = True
-        
-        if _DEBUG:
-            with open("log/split_note.log", "w") as f:
-                f.write("\n".join(DEBUG_LOG))
+
+        if _debug:
+            with open('log/split_note.log', 'w') as f:
+                f.write('\n'.join(debug_log))
         return subnotes
 
-    @classmethod
-    def group_syncopation():
-        """Group notes of the form '1_ 2_ ~ 2_ 3_'."""
-        for subnote in subnotes:
-            pass
-    
-    def __str__(self):
+    def __repr__(self):
         acc_str = {-1: 'b', 0: '%', 1: '#', None: ' '}
-        oct_str = {-2: ',,', -1: ',', 0: '', 1: "'", 2: "''"}
-        return "{}{}{:2} {:4}".format(
+        oct_str = {-2: ',,', -1: ',', 0: '', 1: "'", 2: '"'}
+        return '{}{}{:2} {:4}'.format(
                 acc_str[self.acc], self.name, oct_str[self.octave], str(self.duration), self.tie)
 
-    def __repr__(self):
-        return "'{}'".format(self.__str__())
 
+class NodeType(Enum):
+    """Type of node."""
 
-NOTE_NODE = 0
-DASH_NODE = 1
-DOT_NODE = 2
+    NOTE = 0
+    DASH = 1
+    DOT = 2
 
 
 class Node:
     def __init__(self, note):
         if isinstance(note, Note):
-            self.type = NOTE_NODE
+            self.type = NodeType.NOTE
             self.value = note
             self.lines = note.lines
             self.dots = note.dots
@@ -236,61 +234,61 @@ class Node:
             if self.lines is None or self.dots is None:
                 duration = note.duration
                 if duration <= 0:
-                    raise ValueError("duration <= 0 for note {}".format(note))
+                    raise ValueError('duration <= 0 for note {}'.format(note))
                 numerator, denominator = duration.numerator, duration.denominator
                 n = denominator.bit_length() - 1
                 if (1 << n) != denominator:
-                    raise ValueError("duration.denominator is not a power of 2 for note {}".format(note))
-                one_groups = list(filter(None, "{:b}".format(numerator).split("0")))
+                    raise ValueError('duration.denominator is not a power of 2 for note {}'.format(note))
+                one_groups = list(filter(None, '{:b}'.format(numerator).split('0')))
                 if len(one_groups) != 1:
-                    raise ValueError("duration {} cannot be represented as a single note".format(note.duration))
+                    raise ValueError('duration {} cannot be represented as a single note'.format(note.duration))
                 m = numerator.bit_length() - 1
                 if duration % Fraction(1) == 0:
                     self.lines = int(duration) - 1
                     self.dots = 0
                 else:
                     if m > n:   # not allowed in numbered musical notation (e.g., duration = 7/2)
-                        raise ValueError("duration {} is not integral, but too long for a note".format(note.duration))
+                        raise ValueError('duration {} is not integral, but too long for a note'.format(note.duration))
                     self.lines = m - n                  # self.lines <= 0
                     self.dots = len(one_groups[0]) - 1  # (number of dots) = (number of ones) - 1
         else:
             if note == '-':
-                self.type = DASH_NODE
+                self.type = NodeType.DASH
             elif note == '.':
-                self.type = DOT_NODE
+                self.type = NodeType.DOT
             else:
-                raise ValueError("unknown node type for {}".format(note))
+                raise ValueError('unknown node type for {}'.format(note))
             self.value = note
             self.lines = None
             self.dots = None
         self.text = None
 
     def __str__(self):
-        if self.type == NOTE_NODE:
+        if self.type == NodeType.NOTE:
             underlines = max(-self.lines, 0)
             if self.value.tie[1]:
-                return "{} u{}  {} ~".format(self.value, underlines, self.text)
+                return '{} u{}  {} ~'.format(self.value, underlines, self.text)
             else:
-                return "{} u{}  {}".format(self.value, underlines, self.text)
+                return '{} u{}  {}'.format(self.value, underlines, self.text)
         else:
-            return " {}".format(self.value)
+            return ' {}'.format(self.value)
 
 
 def parse_pitch(key, s):
-    key_dict = dict(zip("ABCDEFG", [6, 7, 1, 2, 3, 4, 5]))
-    extended_upper_name_dict = dict(zip("qwertyu", range(1, 8)))
-    extended_lower_name_dict = dict(zip("zxcvbnm", range(1, 8)))
+    key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
+    extended_upper_name_dict = dict(zip('qwertyu', range(1, 8)))
+    extended_lower_name_dict = dict(zip('zxcvbnm', range(1, 8)))
     acc_dict = {'': None, '#': 1, '$': -1, '%': 0}
     match = re.fullmatch(r"([#$%]?)([0-7a-zA-Z])([',]*)", s)
     if match is None:
-        raise ValueError("wrong forat for pitch {}".format(s))
+        raise ValueError('wrong format for pitch {}'.format(s))
     acc, name, octave = match.groups()
     acc = acc_dict[acc]
     octave = octave.count("'") - octave.count(',')
-    if name == "0":
+    if name == '0':
         acc, name, octave = None, 0, 0
-    elif key == "solfa":
-        if name in "1234567":
+    elif key == 'solfa':
+        if name in '1234567':
             name = int(name)
         elif name in extended_upper_name_dict:
             name = extended_upper_name_dict[name]
@@ -299,14 +297,14 @@ def parse_pitch(key, s):
             name = extended_lower_name_dict[name]
             octave -= 1
         else:
-            raise ValueError("'{}' is not allowed in <key> solfa".format(s))
+            raise ValueError('{!r} is not allowed in <key> solfa'.format(s))
     else:
-        if name in "1234567":
+        if name in '1234567':
             name = int(name)
-        elif name in "cdefgabCDEFGAB":
+        elif name in 'cdefgabCDEFGAB':
             name = key_dict[name.upper()]
         else:
-            raise ValueError("'{}' is not allowed in key {}".format(name, key))
+            raise ValueError('{!r} is not allowed in key {}'.format(name, key))
         if acc is not None:
             acc -= key[2][name]         # relative to key
         if key[0] <= 4:                 # <= #F major
@@ -323,8 +321,8 @@ def parse_pitch(key, s):
 
 
 class Song:
-    """Member variables
-    
+    """Member variables.
+
     key: (name, accidental, 8-tuple)
         tuple[i] indicates whether i is flat or sharp.
         For example, key = (2,  0, (?, 1,  0,  0,  1,  0,  0,  0)) stands for D major.
@@ -339,72 +337,77 @@ class Song:
         self.lyrics = []
 
     def __str__(self):
-        return "<key> {}, <time> {}\n".format(self.key, self.time) \
-             + "<first_bar> {}\n".format(self.first_bar_duration) \
-             + "<melody> {}\n".format(self.melody) \
-             + "<lyrics> {}".format(self.lyrics)
-    
+        lines = [
+            '<key> {}'.format(self.key),
+            '<melody> {}'.format(self.melody),
+            '<lyrics> {}'.format(self.lyrics),
+        ]
+        return '\n'.join(lines)
+
     def print(self):
-        print("<key> {}".format(self.key))
+        print('<key> {}'.format(self.key))
         for time, notes in self.melody:
-            print("{}".format("<time> {}/{}".format(*time)))
+            print('{}'.format('<time> {}/{}'.format(*time)))
             for note in notes:
-                print("    {}".format(note))
+                print('    {}'.format(note))
         for tag, lyrics in self.lyrics:
-            print("<{}> {}".format(tag, lyrics))
+            print('<{}> {}'.format(tag, lyrics))
 
     def append_time_signature(self, time, s):
         """Append bars to self.melody.
-        
+
         Split s into bars by '|'.
         If the duration of a bar exceeds time, split it further based on whether it is the first bar.
         """
         if not time:
-            raise ValueError("unknown <time>")
+            raise ValueError('unknown <time>')
         if not s:
             return
-        
+
         pattern_pitch = r"[#$%]?[0-7a-zA-Z][',]*"
-        pattern_pitches = r"\[(?:{})+\]".format(pattern_pitch)
-        pattern_duration = r"(?:[_=]+|-*)\.*(?:/3)?"
-        pattern = "(~?)" + r"({}|{})({})".format(pattern_pitch, pattern_pitches, pattern_duration) + "(~?)"
+        pattern_pitches = r'\[(?:{})+\]'.format(pattern_pitch)
+        pattern_duration = r'(?:[_=]+|-*)\.*(?:/3)?'
+        pattern = '(~?)' + '({}|{})({})'.format(pattern_pitch, pattern_pitches, pattern_duration) + '(~?)'
 
         bars = s.split('|')
         for i, bar in enumerate(bars):
             if not bar:
                 continue
-            
+
             bar_duration = Fraction(0)
             note_list = []
-            
+
             # parse notes in bar
             notes = re.findall(pattern, bar)
             if ''.join([''.join(note) for note in notes]) != bar:
-                raise ValueError("wrong format for {} (notes = {})".format(bar, notes))
+                raise ValueError('wrong format for {} (notes = {})'.format(bar, notes))
             for tie0, pitches, duration, tie1 in notes:
                 tie0, tie1 = (tie0 != ''), (tie1 != '')
                 dots = duration.count('.')
                 dashes = duration.count('-')
-                unders = duration.count('=') * 2 + duration.count('_')
-                if dashes > 0 and unders > 0:
-                    raise ValueError("wrong format for {}".format(notes))
+                underlines = duration.count('=') * 2 + duration.count('_')
+                if dashes > 0 and underlines > 0:
+                    raise ValueError('wrong format for {}'.format(notes))
                 triplet = Fraction(1)
-                if "/3" in duration:
+                if '/3' in duration:
                     triplet = Fraction(2, 3)
-                if time[2]:
+                if time.lower:
                     if pitches.startswith('[') and pitches.endswith(']'):
-                        duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                        duration = (Fraction(dashes + 1, 1 << underlines)
+                                    * (Fraction(2) - Fraction(1, 1 << dots)) * triplet)
                     else:
-                        if dots or unders or (triplet != 1):
-                            raise ValueError("dots, underlines and triplets are not allowed" + \
-                                             "without brackets in <time> {}/{} hyphen={}".format(*time))
-                        duration = Fraction(dashes + 1, time[2] // 4)
-                        dashes, unders, dots = None, None, None
+                        if dots or underlines or (triplet != 1):
+                            raise ValueError('dots, underlines and triplets are not allowed'
+                                             ' without brackets in <time> {}/{} hyphen={}'
+                                             .format(*time))
+                        duration = Fraction(dashes + 1, time.hyphen // 4)
+                        dashes, underlines, dots = None, None, None
                 else:
-                    duration = Fraction(dashes + 1, 1 << unders) * (Fraction(2) - Fraction(1, 1 << dots)) * triplet
+                    duration = (Fraction(dashes + 1, 1 << underlines)
+                                * (Fraction(2) - Fraction(1, 1 << dots)) * triplet)
                 pitches = pitches.lstrip('[').rstrip(']')
-                pitches = re.findall(r"({})".format(pattern_pitch), pitches)
-                
+                pitches = re.findall('({})'.format(pattern_pitch), pitches)
+
                 for k, pitch in enumerate(pitches):
                     acc, name, octave = parse_pitch(self.key, pitch)
                     tie = [tie0, tie1]
@@ -413,18 +416,18 @@ class Song:
                     if k < len(pitches) - 1:
                         tie[1] = False
                     # new Note
-                    note = Note(acc, name, octave, duration, dashes, unders, dots, tie)
+                    note = Note(acc, name, octave, duration, dashes, underlines, dots, tie)
                     note_list.append(note)
                     bar_duration += duration
             assert note_list
-            
+
             # append to self.melody
-            if time[0] is None:
+            if time.upper is None:
                 time_duration = bar_duration
-            elif time[1] == 4:
-                time_duration = Fraction(time[0])
+            elif time.lower == 4:
+                time_duration = Fraction(time.upper)
             else:
-                time_duration = Fraction(time[0], 2)
+                time_duration = Fraction(time.upper, 2)
             if i == 0 and len(bars) > 1:        # first bar but not last
                 beat = (time_duration - (bar_duration % time_duration)) % time_duration
             else:
@@ -439,9 +442,9 @@ class Song:
                     if beat == 0:
                         self.melody.append((time, beat, []))    # new bar
                     sub_duration = min(remaining_duration, time_duration - beat)
-                    if not time[2] and sub_duration != remaining_duration:
-                        raise ValueError("{} goes beyond one bar with time {}/{}"\
-                                .format(note, time[0], time[1]))
+                    if not time.hyphen and sub_duration != remaining_duration:
+                        raise ValueError('{} goes beyond one bar with time {}/{}'
+                                         .format(note, time.upper, time.lower))
                     sub_note = note.copy()
                     sub_note.duration = sub_duration
                     if not first:
@@ -461,14 +464,14 @@ class Song:
         prev_tie = False
         for time, start_beat, notes in self.melody:
             if not notes:
-                raise ValueError("empty bar in self.melody")
+                raise ValueError('empty bar in self.melody')
             for note in notes:
                 if prev_tie:
                     note.tie[0] = True
                 if note.name == 0:
                     note.tie = [False, False]
                 prev_tie = note.tie[1]
-        self.melody[ 0][-1][ 0].tie[0] = False  # first note
+        self.melody[0][-1][0].tie[0] = False    # first note
         self.melody[-1][-1][-1].tie[1] = False  # last note
 
     def try_split_notes(self):
@@ -478,7 +481,7 @@ class Song:
         For these sub-notes, perform a 2nd-staged grouping.
         """
         for time, start_beat, notes in self.melody:
-            if not time[2]:
+            if not time.hyphen:
                 continue
             subnotes = []
             beat = start_beat
@@ -488,19 +491,18 @@ class Song:
                 else:
                     subnotes.append(note)
                 beat += note.duration
-            beat = start_beat
             notes[:] = subnotes
 
-    def merge_melody_lyrics(self, _DEBUG=False):
+    def merge_melody_lyrics(self, _debug=False):
         """Return a list of sections.
-        
+
         section: (tag, lines)
-        line: [nodes, list of bars, list of ties]
+        line: [nodes, list of bars, list of ties, list of slurs]
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
-        DEBUG_LOG = []
-        
+        debug_log = []
+
         # calculate split indices according to self.lyrics
         sum_len = 0
         split_sections = {}
@@ -508,24 +510,36 @@ class Song:
         for i, (tag, lyrics) in enumerate(self.lyrics):
             split_sections[sum_len] = tag
             for j, s in enumerate(lyrics):
+                if s.startswith('~'):
+                    raise ValueError("a line of lyrics cannot start with '~' ({})".format(s))
                 split_lines.append(sum_len)
                 sum_len += len(s)
         all_lyrics = ''.join([''.join(section[1]) for section in self.lyrics])
-        num_words = len(all_lyrics)     # contains "~"
+        num_words = len(all_lyrics)     # contains '~'
+
+        # calculate the starting and ending index of slurs
+        slur_lyrics_idx = {}
+        prev_idx = None
+        for idx, text in enumerate(all_lyrics):
+            if text != '~':
+                if prev_idx is not None and idx != prev_idx + 1:
+                    slur_lyrics_idx[prev_idx] = idx - 1
+                prev_idx = idx
+        if prev_idx is not None:
+            slur_lyrics_idx[prev_idx] = num_words - 1
 
         # split melody
         lyrics_idx = 0
         section_added, line_added = False, False    # whether these are added for this lyrics_idx
-        line_node_idx = 0
         line_node_idx_prev = -1
         sections = []
         for time, start_beat, notes in self.melody:
-            if time[0] is None:
+            if time.upper is None:
                 time_duration = None
-            elif time[1] == 4:
-                time_duration = Fraction(time[0])
+            elif time.lower == 4:
+                time_duration = Fraction(time.upper)
             else:
-                time_duration = Fraction(time[0], 2)
+                time_duration = Fraction(time.upper, 2)
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
@@ -538,11 +552,11 @@ class Song:
                     if sections[-1][1] and note.name == 0 and (beat + note.duration) % time_duration == 0:
                         pass
                     else:
-                        sections[-1][1].append([[], [], []])    # (nodes, bars, ties)
+                        sections[-1][1].append([[], [], [], []])    # (nodes, bars, ties, slurs)
                         line_added = True
                         line_node_idx_prev = -1
                 line = sections[-1][1][-1]
-                nodes, bars, ties = line
+                nodes, bars, ties, slurs = line
                 # new bar
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
@@ -557,7 +571,7 @@ class Song:
                 else:
                     if note.name:
                         if lyrics_idx >= num_words:
-                            raise ValueError("#notes > {} words".format(num_words))
+                            raise ValueError('#notes > {} words'.format(num_words))
                         if all_lyrics[lyrics_idx] != '~':
                             node.text = all_lyrics[lyrics_idx]
                         lyrics_idx += 1
@@ -574,19 +588,20 @@ class Song:
                     nodes.append(Node('.'))
                 beat += note.duration
         if lyrics_idx != num_words:
-            raise ValueError("{} notes != {} words".format(lyrics_idx, num_words))
-        
-        if _DEBUG:
-            with open("log/merge.log", "w") as f:
-                f.write("\n".join(DEBUG_LOG))
-        
+            raise ValueError('{} notes != {} words'.format(lyrics_idx, num_words))
+
+        if _debug:
+            with open('log/merge.log', 'w') as f:
+                f.write('\n'.join(debug_log))
+
         return sections
-    
-    def group_underlines(self, sections):
+
+    @classmethod
+    def group_underlines(cls, sections):
         """Group underlines shared by contiguous notes, and find triplets by modifying sections in place.
-        
+
         section: (tag, lines)
-        line: [nodes, bars, ties, underlines_list, triplets]
+        line: [nodes, bars, ties, slurs, underlines_list, triplets]
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         underlines_list: list of underlines
@@ -596,29 +611,22 @@ class Song:
         """
         for tag, lines in sections:
             for line in lines:
-                nodes, bars, ties = line
+                nodes, bars, ties, slurs = line
                 underlines_list = [None]
                 triplets = []
                 triplet_duration = None
                 for time, start_beat, idx_list in bars:
-                    bar_duration = sum([nodes[idx].value.duration for idx in idx_list if nodes[idx].type == NOTE_NODE])
-                    if time[0] is None:
-                        time_duration = bar_duration
-                    elif time[1] == 4:
-                        time_duration = Fraction(time[0])
-                    else:
-                        time_duration = Fraction(time[0], 2)
                     beat = start_beat
                     assert beat >= 0
                     idx_prev = -9
                     for idx in idx_list:
                         node = nodes[idx]
                         note = node.value
-                        if node.type != NOTE_NODE:
+                        if node.type != NodeType.NOTE:
                             continue
                         # triplet
-                        if (time[1] == 4 and beat % Fraction(1) == 0) or \
-                           (time[1] == 8 and beat % Fraction(3, 2) == 0):
+                        if (time.lower == 4 and beat % Fraction(1) == 0) or \
+                           (time.lower == 8 and beat % Fraction(3, 2) == 0):
                             new_group = True
                             triplet_duration = None
                         else:
@@ -626,7 +634,7 @@ class Song:
                         if note.duration.denominator % 3 == 0:       # triplet
                             if new_group or not triplets or note.duration != triplet_duration:
                                 if triplets and len(triplets[-1]) != 3:
-                                    raise ValueError("triplet with less than 3 notes")
+                                    raise ValueError('triplet with less than 3 notes')
                                 triplets.append([idx])
                             elif len(triplets[-1]) == 3:
                                 triplets.append([idx])
@@ -650,43 +658,41 @@ class Song:
                 line.append(underlines_list)
                 line.append(triplets)
 
-    def to_tex_tikzpicture(self, output_dir=""):
-        """Write environment tikzpicture source code to file if provided.
-        """
-        slides_file = os.path.join(output_dir, "slides.tex")
+    def to_tex_tikzpicture(self, output_dir=''):
+        """Write environment tikzpicture source code to file if provided."""
+        slides_file = os.path.join(output_dir, 'slides.tex')
         slides_output = []
-        line_file_format = os.path.join(output_dir, "line-{}{:02d}.tex")
+        line_file_format = os.path.join(output_dir, 'line-{}{:02d}.tex')
         page_count = 0
-        
+
         sections = self.merge_melody_lyrics()
         self.group_underlines(sections)
-        
+
         for i, (tag, lines) in enumerate(sections):
             # new section
             line_count = 0
-            
-            for j, (nodes, bars, ties, underlines_list, triplets) in enumerate(lines):
+            for j, (nodes, bars, ties, slurs, underlines_list, triplets) in enumerate(lines):
                 # new page
                 if line_count % 2 == 0:
                     page_count += 1
                     if page_count > 1:
-                        slides_output.append("\n")
-                    slides_output.append("%%%%% PAGE {} %%%%%".format(page_count))
-                    slides_output.append(r"\newpage")
-                    slides_output.append("")
+                        slides_output.append('\n')
+                    slides_output.append('%%%%% PAGE {} %%%%%'.format(page_count))
+                    slides_output.append(r'\newpage')
+                    slides_output.append('')
                     if j == 0:      # first page in section
-                        slides_output.append("% <{}>".format(tag))
-                        slides_output.append(r"\begin{nmntag}")
-                        slides_output.append(r"\textmd{$<$\hspace{-0pt}" + tag + r"\hspace{-0pt}$>$}")
-                        slides_output.append(r"\end{nmntag}")
+                        slides_output.append('% <{}>'.format(tag))
+                        slides_output.append(r'\begin{nmntag}')
+                        slides_output.append(r'\textmd{$<$\hspace{-0pt}' + tag + r'\hspace{-0pt}$>$}')
+                        slides_output.append(r'\end{nmntag}')
                     else:
-                        slides_output.append(r"\begin{nmnblank}")
-                        slides_output.append(r"\end{nmnblank}")
-                
+                        slides_output.append(r'\begin{nmnblank}')
+                        slides_output.append(r'\end{nmnblank}')
+
                 # new line
-                line_lyrics = ""
+                line_lyrics = ''
                 line_output = []
-                line_output.append(r"\begin{tikzpicture}")
+                line_output.append(r'\begin{tikzpicture}')
                 line_output.append(r"""\tikzstyle{every node}=[inner sep=0pt]
 \tikzstyle{dot}=[circle,fill=white,inner sep=0pt,text width=1.5pt]
 \tikzstyle{lyrics}=[node distance=15pt]
@@ -694,39 +700,39 @@ class Song:
 \tikzstyle{underline}=[line width=0.5pt]
 \tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
-                line_output.append("\n\n% nodes")
-                line_output.append(r"\node at (0pt, 12pt) {}; % for space adjustment")
-                
+                line_output.append('\n\n% nodes')
+                line_output.append(r'\node at (0pt, 12pt) {}; % for space adjustment')
+
                 pos = 0
                 first_text_idx = None
                 for k, (time, start_beat, idx_list) in enumerate(bars):
                     # new bar
                     if k > 0:
                         pos -= 2.5
-                        line_output.append(r"\node at ({}pt,0) {{|}};".format(pos))
+                        line_output.append(r'\node at ({}pt,0) {{|}};'.format(pos))
                         pos += 7.5
                     for idx in idx_list:
                         node = nodes[idx]
                         note = node.value
-                        line_output.append("")
-                        if node.type != NOTE_NODE:
+                        line_output.append('')
+                        if node.type != NodeType.NOTE:
                             pos -= 2.5
-                            if node.type == DASH_NODE:
-                                line_output.append(r"\node at ({}pt,-1pt) {{-}};".format(pos))
-                            elif node.type == DOT_NODE:
-                                line_output.append(r"\node[dot] at ({}pt,0) {{}};".format(pos))
+                            if node.type == NodeType.DASH:
+                                line_output.append(r'\node at ({}pt,-1pt) {{-}};'.format(pos))
+                            elif node.type == NodeType.DOT:
+                                line_output.append(r'\node[dot] at ({}pt,0) {{}};'.format(pos))
                             pos += 7.5
                             continue
                         # name
-                        line_output.append(r"\node (a{}) at ({}pt,0) {{{}}};".format(idx, pos, note.name))
+                        line_output.append(r'\node (a{}) at ({}pt,0) {{{}}};'.format(idx, pos, note.name))
                         # acc
-                        acc_dict = {-1: "flat", 0: "natural", 1: "sharp"}
+                        acc_dict = {-1: 'flat', 0: 'natural', 1: 'sharp'}
                         if note.acc is not None:
-                            line_output.append(r"\node at ($(a{}.north west)+(-1pt,0)$){{\tiny$\{}$}};" \
-                                    .format(idx, acc_dict[note.acc]))
+                            line_output.append(r'\node at ($(a{}.north west)+(-1pt,0)$){{\tiny$\{}$}};'
+                                               .format(idx, acc_dict[note.acc]))
                         # octave
                         if note.octave > 0:
-                            line_output.append(r"\node[dot,above of=a{},node distance=6pt] {{}};".format(idx))
+                            line_output.append(r'\node[dot,above of=a{},node distance=6pt] {{}};'.format(idx))
                         elif note.octave < 0:
                             node_distance = 7
                             if node.lines <= -3:
@@ -735,96 +741,94 @@ class Song:
                                 node_distance = 9
                             elif node.lines == -1:
                                 node_distance = 8
-                            line_output.append(r"\node[dot,below of=a{},node distance={}pt] {{}};" \
-                                    .format(idx, node_distance))
+                            line_output.append(r'\node[dot,below of=a{},node distance={}pt] {{}};'
+                                               .format(idx, node_distance))
                         # text
                         height = -17
                         if node.text:
                             if node.text in '每悔':
                                 height += 1
-                            text = "{0}{1}{0}".format("\phantom{|}", node.text)
+                            text = '{0}{1}{0}'.format('\phantom{|}', node.text)
                             if first_text_idx is None:
                                 first_text_idx = idx
-                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};"
+                            line_output.append(r'\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};'
                                                .format(idx, text, height))
                             line_lyrics += node.text
                         elif first_text_idx is None:
-                            text = r"\phantom{{{}}}".format("天")
-                            line_output.append(r"\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};" \
-                                    .format(idx, text, height))
+                            text = r'\phantom{{{}}}'.format('天')
+                            line_output.append(r'\node[lyrics] (t{0}) at ($(a{0})+(0,{2}pt)$) {{{1}}};'
+                                               .format(idx, text, height))
                             first_text_idx = idx
                         pos += 10
 
                 # ties
-                line_output.append("\n\n% ties")
+                line_output.append('\n\n% ties')
                 for idx0, idx1 in ties:
                     dis = 2
                     if nodes[idx0].value.octave >= 1:
                         dis = 5
-                    line_output.append(r"\draw[tie] (a{}.north) ++(0,{}pt) coordinate (tmp) to (a{}.north |- tmp);" \
-                            .format(idx0, dis, idx1))
+                    line_output.append(r'\draw[tie] (a{}.north) ++(0,{}pt) coordinate (tmp) to (a{}.north |- tmp);'
+                                       .format(idx0, dis, idx1))
 
                 # underlines
-                line_output.append("\n\n% underlines")
+                line_output.append('\n\n% underlines')
                 for depth, underlines in enumerate(underlines_list):
                     if depth == 0:
                         continue
                     for idx0, idx1 in underlines:
-                        line_output.append(
-                                r"\draw[underline] (a{}.south west) ++(0,-{}pt)".format(idx0, depth * 1.5) + \
-                                r" coordinate (tmp) to (a{}.south east |- tmp);".format(idx1))
+                        line_output.append(r'\draw[underline] (a{}.south west) ++(0,-{}pt)'.format(idx0, depth * 1.5)
+                                           + r' coordinate (tmp) to (a{}.south east |- tmp);'.format(idx1))
 
                 # triplets
-                line_output.append("\n\n% triplets")
+                line_output.append('\n\n% triplets')
                 for triplet in triplets:
                     dis0, dis1 = 2, 9
                     if nodes[triplet[0]].value.octave >= 1 or nodes[triplet[2]].value.octave >= 1:
                         dis0 = 5
                     if nodes[triplet[1]].value.octave >= 1:
                         dis1 = 12
-                    line_output.append(r"\node[above of=a{},node distance={}pt] (tri) {{\tiny{{3}}}};" \
-                            .format(triplet[1], dis1))
-                    line_output.append(r"\draw[tie0] (a{}.north) +(0,{}pt) to ($(tri.west)+(-1pt,0)$);" \
-                            .format(triplet[0], dis0))
-                    line_output.append(r"\draw[tie1] (a{}.north) +(0,{}pt) to ($(tri.east)+(+1pt,0)$);" \
-                            .format(triplet[2], dis0))
-                
-                line_output.append("")
-                line_output.append(r"\end{tikzpicture}")
-                line_output.append("")
-                assert line_output[0] == r"\begin{tikzpicture}" and pos > 0
-                line_output[0] = line_output[0] + "[xscale={}]".format(110 / pos)
+                    line_output.append(r'\node[above of=a{},node distance={}pt] (tri) {{\tiny{{3}}}};'
+                                       .format(triplet[1], dis1))
+                    line_output.append(r'\draw[tie0] (a{}.north) +(0,{}pt) to ($(tri.west)+(-1pt,0)$);'
+                                       .format(triplet[0], dis0))
+                    line_output.append(r'\draw[tie1] (a{}.north) +(0,{}pt) to ($(tri.east)+(+1pt,0)$);'
+                                       .format(triplet[2], dis0))
+
+                line_output.append('')
+                line_output.append(r'\end{tikzpicture}')
+                line_output.append('')
+                assert line_output[0] == r'\begin{tikzpicture}' and pos > 0
+                line_output[0] = line_output[0] + '[xscale={}]'.format(110 / pos)
 
                 line_file = line_file_format.format(chr(ord('a') + i), j)
-                with open(line_file, "w") as f:
-                    f.write("\n".join(line_output))
+                with open(line_file, 'w') as f:
+                    f.write('\n'.join(line_output))
                 line_count += 1
-                
-                slides_output.append("\n% {}".format(line_lyrics))
-                slides_output.append(r"\begin{nmnline}")
-                slides_output.append(r"\input{{{}}}".format(line_file.split('/')[-1]))
-                slides_output.append(r"\end{nmnline}")
-        
-        with open(slides_file, "w") as f:
-            f.write("\n".join(slides_output))
 
-    def print(self, sections):
+                slides_output.append('\n% {}'.format(line_lyrics))
+                slides_output.append(r'\begin{nmnline}')
+                slides_output.append(r'\input{{{}}}'.format(line_file.split('/')[-1]))
+                slides_output.append(r'\end{nmnline}')
+
+        with open(slides_file, 'w') as f:
+            f.write('\n'.join(slides_output))
+
+    @classmethod
+    def print(cls, sections):
         for tag, lines in sections:
-            print("{:=^80}".format(' ' + tag + ' '))
-            for nodes, bars, ties, underlines_list, triplets in lines:
-                print("-" * 50)
-                #for k, note in enumerate(notes):
-                #    print("<note {:02d}> {}".format(k, note))
+            print('{:=^80}'.format(' ' + tag + ' '))
+            for nodes, bars, ties, slurs, underlines_list, triplets in lines:
+                print('-' * 50)
                 for time, start_beat, a in bars:
-                    print("<time> {}/{} beat={}".format(time[0], time[1], start_beat))
+                    print('<time> {}/{} beat={}'.format(time.upper, time.lower, start_beat))
                     for idx in a:
-                        print("    <node {:02d}> {}".format(idx, nodes[idx]))
-                print("<ties> {}".format(ties))
-                print("<underlines>")
+                        print('    <node {:02d}> {}'.format(idx, nodes[idx]))
+                print('<ties> {}'.format(ties))
+                print('<underlines>')
                 for k, underlines in enumerate(underlines_list):
                     if k >= 1:
-                        print("    depth {}: {}".format(k, underlines))
-                print("<triplets> {}".format(triplets))
+                        print('    depth {}: {}'.format(k, underlines))
+                print('<triplets> {}'.format(triplets))
 
 
 def parse_key(s):
@@ -860,16 +864,16 @@ def parse_key(s):
 
     # parse
     if not s:
-        raise ValueError("empty key")
-    elif s == "solfa":
+        raise ValueError('empty key')
+    elif s == 'solfa':
         return s
     if re.search(r'\d', s):     # s contains digits
         if len(s) == 1:
             if s[0] != '0':
-                raise ValueError("wrong format for <key> {}".format(s))
-            return (1, 0)
+                raise ValueError('wrong format for <key> {}'.format(s))
+            return 1, 0
         if len(s) != 2 or s[0] not in '01234567' or s[1] not in '#$':
-            raise ValueError("wrong format for <key> {}".format(s))
+            raise ValueError('wrong format for <key> {}'.format(s))
         if s[1] == '#':
             x = 1
         else:
@@ -879,7 +883,7 @@ def parse_key(s):
         key = s[-1].upper()
         key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
         if key not in key_dict:
-            raise ValueError("wrong format for <key> {}".format(s))
+            raise ValueError('wrong format for <key> {}'.format(s))
         key = key_dict[key]
         tmp = 0
         if len(s) == 2:
@@ -888,8 +892,8 @@ def parse_key(s):
             elif s[0] == '$':
                 tmp = -1
             else:
-                raise ValueError("wrong format for <key> {}".format(s))
-        return (key, tmp, key2sym[(key, tmp)][2])
+                raise ValueError('wrong format for <key> {}'.format(s))
+        return key, tmp, key2sym[(key, tmp)][2]
 
 
 def parse_time(s):
@@ -898,51 +902,51 @@ def parse_time(s):
     ss = s.split(maxsplit=1)
     if len(ss) > 1:
         hyphen = ss[1].replace(' ', '')
-        if not hyphen.startswith("hyphen="):
-            raise ValueError("wrong format for <time> {}".format(s))
+        if not hyphen.startswith('hyphen='):
+            raise ValueError('wrong format for <time> {}'.format(s))
         hyphen = hyphen[7:]
-        if hyphen not in ["4", "8", "16"]:
-            raise ValueError("only hyphen=[4,8,16] is allowed")
+        if hyphen not in ['4', '8', '16']:
+            raise ValueError('only hyphen=[4,8,16] is allowed')
         hyphen = int(hyphen)
     ss = ss[0].replace(' ', '').split('/')
     if not ss:
-        raise ValueError("empty <time>")
+        raise ValueError('empty <time>')
     if len(ss) != 2:
-        raise ValueError("wrong format for <time> {}".format(s))
+        raise ValueError('wrong format for <time> {}'.format(s))
     if ss[0] == '?':
         a, b = None, int(ss[1])
     else:
         a, b = int(ss[0]), int(ss[1])
     if (a, b) not in [(2, 4), (3, 4), (4, 4), (6, 8), (9, 8), (12, 8), (None, 4), (None, 8)]:
-        raise ValueError("unrecognizable <time> {}/{}".format(a, b))
+        raise ValueError('unrecognizable <time> {}/{}'.format(a, b))
     if hyphen and hyphen < b:
-        raise ValueError("hyphen must >= {} for <time> {}/{}".format(b, a, b))
-    return (a, b, hyphen)
+        raise ValueError('hyphen must >= {} for <time> {}/{}'.format(b, a, b))
+    return Time(a, b, hyphen)
 
 
 def load_song(melody_file, lyrics_file=None):
     """Load numbered musical notation and lyrics, and return Song."""
     song = Song()
-    
+
     # melody
     with open(melody_file) as f:
         time = None
-        s = ""
+        s = ''
         for line in f:
             line = line.strip()
             if line == 'break':
                 break
-            elif not line or line.startswith("//"):     # blank or comment
+            elif not line or line.startswith('//'):     # blank or comment
                 continue
-            elif line.startswith("<key>"):
+            elif line.startswith('<key>'):
                 if song.key:
-                    raise ValueError("only one <key> is allowed")
+                    raise ValueError('only one <key> is allowed')
                 song.key = parse_key(line[5:].strip())
-            elif line.startswith("<time>"):
+            elif line.startswith('<time>'):
                 if time:
                     song.append_time_signature(time, s)
                 time = parse_time(line[6:].strip())
-                s = ""
+                s = ''
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)
@@ -950,27 +954,22 @@ def load_song(melody_file, lyrics_file=None):
     song.try_split_notes()
 
     # lyrics
-    with open(lyrics_file) as f:
+    with open(lyrics_file, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             s = line
-            for c in " ,.!?" + "　。，、！？":
+            for c in ' ,.!?' + '　。，、！？':
                 s = s.replace(c, '')
             if s == 'break':
                 break
-            elif not s or s.startswith("//"):
+            elif not s or s.startswith('//'):
                 continue
-            elif s.startswith("<tag>"):
+            elif s.startswith('<tag>'):
                 tag = s[5:]
                 song.lyrics.append((tag, []))
             else:
                 if not song.lyrics:
-                    raise ValueError("no <tag> specified before {}".format(line))
+                    raise ValueError('no <tag> specified before {}'.format(line))
                 song.lyrics[-1][1].append(s)
-    
+
     return song
-
-
-if __name__ == '__main__':
-    sys.exit()
-
