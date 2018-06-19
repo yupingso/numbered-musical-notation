@@ -1,0 +1,16 @@
+<key> F
+<time> 4/4
+
+[a,b,]_ | c a [gfed]_ c - -
+[b,c]_    d b [agfa]_ g - -
+[a,b,]_   c a [gfed]_ e g f
+[fe]_     d_[ef]= ~ [fg]_ [agfe]_ f - -
+
+[ab]_ c' c' [c'bag]_ f - -
+[ga]_ b  b  [b agf]_ g - -
+[ab]_ c' c' [c'bag]_ a g f
+[ga]_ b [bb]_ [bagf]_ f - - -
+
+d e f g c e g f d e f b a - - -
+d e f g c e g f d e f g f - -
+
