@@ -801,7 +801,7 @@ class Song:
                 line_output[0] = line_output[0] + '[xscale={}]'.format(110 / pos)
 
                 line_file = line_file_format.format(chr(ord('a') + i), j)
-                with open(line_file, 'w') as f:
+                with open(line_file, 'w', encoding='utf-8') as f:
                     f.write('\n'.join(line_output))
                 line_count += 1
 
@@ -810,7 +810,7 @@ class Song:
                 slides_output.append(r'\input{{{}}}'.format(line_file.split('/')[-1]))
                 slides_output.append(r'\end{nmnline}')
 
-        with open(slides_file, 'w') as f:
+        with open(slides_file, 'w', encoding='utf8') as f:
             f.write('\n'.join(slides_output))
 
     @classmethod
@@ -898,7 +898,7 @@ def parse_key(s):
 
 def parse_time(s):
     """Convert time signature string to a pair of integers."""
-    hyphen = None
+    hyphen = 4
     ss = s.split(maxsplit=1)
     if len(ss) > 1:
         hyphen = ss[1].replace(' ', '')
