@@ -713,6 +713,12 @@ class Song:
                         pos += 7.5
                     for idx in idx_list:
                         node = nodes[idx]
+                        # HACK: Replace 'X' with None
+                        if node.text == 'X':
+                            node.text = None
+                            note = node.value
+                            note.acc = None
+                            note.name = 0
                         note = node.value
                         line_output.append('')
                         if node.type != NodeType.NOTE:
