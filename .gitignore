@@ -92,6 +92,7 @@ ENV/
 # others
 *~
 /.idea/
+*.gz
 /latex/slides.tex
 /latex/line*.tex
 /latex/*.aux
