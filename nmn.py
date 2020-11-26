@@ -828,7 +828,11 @@ class Song:
                 for time, start_beat, a in bars:
                     print('<time> {}/{} beat={}'.format(time.upper, time.lower, start_beat))
                     for idx in a:
-                        print('    <node {:02d}> {}'.format(idx, nodes[idx]))
+                        try:
+                            print('    <node {:02d}> {}'.format(idx, nodes[idx]))
+                        except UnicodeEncodeError:
+                            nodes[idx].text = '?'
+                            print('    <node {:02d}> {}'.format(idx, nodes[idx]))
                 print('<ties> {}'.format(ties))
                 print('<underlines>')
                 for k, underlines in enumerate(underlines_list):
