@@ -596,6 +596,7 @@ class Song:
             raise ValueError('{} notes != {} words'.format(lyrics_idx, num_words))
 
         if _debug:
+            os.makedirs('log', exist_ok=True)
             with open('log/merge.log', 'w') as f:
                 f.write('\n'.join(debug_log))
 
