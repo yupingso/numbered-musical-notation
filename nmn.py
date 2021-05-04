@@ -758,6 +758,8 @@ class Song:
                         if node.text:
                             if node.text in '每悔':
                                 height += 1
+                            elif node.text in '海':
+                                height += 1.5
                             text = '{0}{1}{0}'.format('\phantom{|}', node.text)
                             if first_text_idx is None:
                                 first_text_idx = idx
