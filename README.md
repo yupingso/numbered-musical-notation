@@ -12,6 +12,13 @@ There are two parts involved in this process:
 No installation is required for the python module. ```import nmn``` will do.
 To produce song slides with LaTeX, however, XeLaTeX and all packages included in ```latex/main.tex``` should be installed properly.
 
+sudo apt-get install texlive
+sudo apt-get install texlive-xetex
+sudo apt-get install texlive-lang-chinese
+
+Follow the instructions on https://ctan.org/tex-archive/fonts/fdsymbol?lang=en to install fdsymbol
+Copy latex/texmf to ~/
+
 ## Running Examples
 * Run `python3 test.py examples/input/ latex` to generate tex files, which will be saved inside latex directory.
 * Run `cd latex/` and `xelatex main.tex` to generate main.pdf.
