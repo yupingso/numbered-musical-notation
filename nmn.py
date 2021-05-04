@@ -564,6 +564,10 @@ class Song:
                 node = Node(note)
                 line_node_idx = len(nodes)
                 bars[-1][-1].append(line_node_idx)
+                if note.name and all_lyrics[lyrics_idx] == '~':
+                    # add a tie connecting the previous note and current one
+                    note.tie[0] = True
+                    lyrics_idx += 1
                 if note.tie[0]:
                     ties.append((line_node_idx_prev, line_node_idx))
                     node.value.tie[0] = True
