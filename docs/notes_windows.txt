@@ -1,0 +1,3 @@
+To convert PDF file to images, run
+
+$ magick.exe -density 200 latex/main.pdf main.jpg
