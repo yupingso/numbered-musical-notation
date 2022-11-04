@@ -725,6 +725,7 @@ class Song:
                             note = node.value
                             note.acc = None
                             note.name = 0
+                            note.octave = 0
                         note = node.value
                         line_output.append('')
                         if node.type != NodeType.NOTE:
