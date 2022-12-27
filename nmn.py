@@ -782,7 +782,7 @@ class Song:
                     dis = 2
                     if nodes[idx0].value.octave >= 1:
                         dis = 5
-                    line_output.append(r'\draw[tie] (a{}.north) ++(0,{}pt) coordinate (tmp) to (a{}.north |- tmp);'
+                    line_output.append(r'\draw[tie] ([xshift=+.2pt]a{}.north) ++(0,{}pt) coordinate (tmp) to ([xshift=-.2pt]a{}.north |- tmp);'
                                        .format(idx0, dis, idx1))
 
                 # underlines
