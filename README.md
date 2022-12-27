@@ -29,8 +29,8 @@ https://ctan.org/tex-archive/fonts/fdsymbol?lang=en, and copy `latex/texmf` to
 
 ## Converting PDF to images
 
-On Windows, run `magick.exe -density 200 latex/main.pdf main.jpg`.
-On Linux, run `convert -density 200 latex/main.pdf main.jpg`.
+On Windows, run `magick.exe -density 200 latex/main.pdf images/main.jpg`.
+On Linux, run `convert -density 200 latex/main.pdf images/main.jpg`.
 If you see the following error message:
 
 ```
