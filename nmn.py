@@ -532,6 +532,7 @@ class Song:
         lyrics_idx = 0
         section_added, line_added = False, False    # whether these are added for this lyrics_idx
         line_node_idx_prev = -1
+        potential_slur_start_line_node_idx = None
         sections = []
         for time, start_beat, notes in self.melody:
             if time.upper is None:
@@ -555,20 +556,33 @@ class Song:
                         sections[-1][1].append([[], [], [], []])    # (nodes, bars, ties, slurs)
                         line_added = True
                         line_node_idx_prev = -1
+                        potential_slur_start_line_node_idx = None
                 line = sections[-1][1][-1]
                 nodes, bars, ties, slurs = line
+                line_node_idx = len(nodes)
                 # new bar
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
+                # handle slurs
+                if note.name:
+                    if not note.tie[0]:
+                        if all_lyrics[lyrics_idx] == '~':
+                            # check if lyrics_idx is the slur end node
+                            if (lyrics_idx == num_words - 1
+                                    or all_lyrics[lyrics_idx + 1] != '~'):
+                                if potential_slur_start_line_node_idx is None:
+                                    raise ValueError('start note of slur not found')
+                                slurs.append((potential_slur_start_line_node_idx,
+                                              line_node_idx))
+                                potential_slur_start_line_node_idx = None
+                        else:
+                            potential_slur_start_line_node_idx = line_node_idx
+                else:
+                    # rest (note 0) cannot in a slur
+                    potential_slur_start_line_node_idx = None
                 # append note Node
                 node = Node(note)
-                line_node_idx = len(nodes)
                 bars[-1][-1].append(line_node_idx)
-                if (note.name and not note.tie[0]
-                        and all_lyrics[lyrics_idx] == '~'):
-                    # add a tie connecting the previous note and current one
-                    note.tie[0] = True
-                    lyrics_idx += 1
                 if note.tie[0]:
                     ties.append((line_node_idx_prev, line_node_idx))
                     node.value.tie[0] = True
@@ -703,6 +717,7 @@ class Song:
 \tikzstyle{dot}=[circle,fill=white,inner sep=0pt,text width=1.5pt]
 \tikzstyle{lyrics}=[node distance=15pt]
 \tikzstyle{tie}=[line width=0.5pt,bend left=45,min distance=4pt,max distance=5pt]
+\tikzstyle{slur}=[line width=0.5pt,bend left=45,min distance=4pt,max distance=8pt]
 \tikzstyle{underline}=[line width=0.5pt]
 \tikzstyle{tie0}=[line width=0.5pt,out=50,in=180,max distance=20pt]
 \tikzstyle{tie1}=[line width=0.5pt,out=130,in=0,max distance=20pt]""")
@@ -785,6 +800,15 @@ class Song:
                     line_output.append(r'\draw[tie] ([xshift=+.2pt]a{}.north) ++(0,{}pt) coordinate (tmp) to ([xshift=-.2pt]a{}.north |- tmp);'
                                        .format(idx0, dis, idx1))
 
+                # slurs
+                line_output.append('\n\n% slurs')
+                for idx0, idx1 in slurs:
+                    dis = 3
+                    if nodes[idx0].value.octave >= 1:
+                        dis = 6
+                    line_output.append(r'\draw[slur] (a{}.north) ++(0,{}pt) coordinate (tmp) to (a{}.north |- tmp);'
+                                       .format(idx0, dis, idx1))
+
                 # underlines
                 line_output.append('\n\n% underlines')
                 for depth, underlines in enumerate(underlines_list):
@@ -843,6 +867,7 @@ class Song:
                             nodes[idx].text = '?'
                             print('    <node {:02d}> {}'.format(idx, nodes[idx]))
                 print('<ties> {}'.format(ties))
+                print('<slurs> {}'.format(slurs))
                 print('<underlines>')
                 for k, underlines in enumerate(underlines_list):
                     if k >= 1:
