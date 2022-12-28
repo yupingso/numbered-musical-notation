@@ -6,8 +6,8 @@ import sys
 import nmn
 
 
-def test(input_dir, to_tex=False):
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
+def main(input_dir, to_tex=False):
+    cur_dir = os.path.abspath('.')
     if input_dir:
         input_dir = os.path.join(cur_dir, input_dir)
     else:
@@ -32,4 +32,4 @@ if __name__ == '__main__':
         input_dir = sys.argv[1]
         if len(sys.argv) > 2 and sys.argv[2] == 'latex':
             to_tex = True
-    test(input_dir, to_tex)
+    main(input_dir, to_tex)
