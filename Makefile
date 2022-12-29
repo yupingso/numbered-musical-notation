@@ -1,12 +1,14 @@
 INPUT ?= examples/input
 BUILD ?= build
+OUTPUT_PPTX ?= $(BUILD)/output.pptx
 
 LATEX_DIR := latex
 LATEX_BUILD := $(BUILD)/latex
 IMAGE_BUILD := $(BUILD)/images
+TEMPLATE_PPTX := ppt/template.pptx
 
 .PHONY: all
-all: image
+all: $(OUTPUT_PPTX)
 
 .PHONY: latex
 latex:
@@ -24,6 +26,10 @@ image: pdf
 	rm -f $(IMAGE_BUILD)/main*.jpg
 	convert -density 200 $(LATEX_BUILD)/main.pdf \
 		"$(IMAGE_BUILD)/main-%02d.jpg"
+
+$(OUTPUT_PPTX): image
+	mkdir -p $(dir $@)
+	src/image2ppt.py $(TEMPLATE_PPTX) $@ $(shell ls -v "$(IMAGE_BUILD)"/*)
 
 .PHONY: lint
 lint:
