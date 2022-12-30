@@ -1,4 +1,4 @@
-INPUT ?= examples/input
+INPUT ?= songs/example
 BUILD ?= build
 OUTPUT_PPTX ?= $(BUILD)/output.pptx
 
