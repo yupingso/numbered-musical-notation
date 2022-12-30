@@ -38,7 +38,8 @@ def test_pillow():
             y_offset = token_size[1] * 0.05
         else:
             y_offset = 0
-        draw.text((x - token_size[0] / 2, y - token_size[1] / 2 + y_offset), text, font=font)
+        draw.text((x - token_size[0] / 2, y - token_size[1] / 2 + y_offset),
+                  text, font=font)
 
     def draw_melody(draw, x, y, text):
         draw_token(draw, x, y, text, font=enbd_font)
@@ -89,10 +90,11 @@ def test_pillow():
             dx = -sin(a) * rx / (rx + ry)
             dy = cos(a) * ry / (rx + ry)
 
-            draw.line([(x - dx * l, y - dy * l), (x + dx * l, y + dy * l)], fill=fill, width=width)
+            draw.line([(x - dx * l, y - dy * l), (x + dx * l, y + dy * l)],
+                      fill=fill, width=width)
 
     def draw_tie_bad(draw, x1, x2, y, h):
-        """Draw tie or slur from ``(x1, y)`` to ``(x2, y)`` with height ``h``."""
+        """Draw tie/slur from ``(x1, y)`` to ``(x2, y)`` with height ``h``."""
         d = x2 - x1
         r = (h * h + d * d / 4) / (h * 2)
         assert r > 0
@@ -100,7 +102,8 @@ def test_pillow():
         x_c = (x1 + x2) / 2
         y_c = y - h + r
         draw_arc_bad(draw, ((x_c - r, y_c - r), (x_c + r, y_c + r)),
-                 270 - angle, 270 + angle, fill=(255, 255, 255), width=6, segments=10)
+                     270 - angle, 270 + angle,
+                     fill=(255, 255, 255), width=6, segments=10)
 
     def draw_tie(image, x1, x2, y, h, color=(255, 255, 255)):
         # convert
@@ -115,7 +118,8 @@ def test_pillow():
         y_c = y - h + r
         270 - angle, 270 + angle
         cv2.ellipse(img, (int(x_c), int(y_c)), (int(r), int(r)), 0,
-                    270 - angle, 270 + angle, color, thickness=5, lineType=cv2.LINE_AA)
+                    270 - angle, 270 + angle, color,
+                    thickness=5, lineType=cv2.LINE_AA)
 
         # convert back
         image = Image.fromarray(img[:, :, ::-1], 'RGB')
@@ -135,7 +139,8 @@ def test_pillow():
                (155+150 + size_m[0] / 2, y_m + size_m[1] / 2 + 20)), width=8)
     draw_circle(draw, 155, y_m + size_m[1] / 2 + 60, 8)
     image, draw = draw_tie(image, 155, 155 + 150, y_m - size_m[1] / 2, 30)
-    image, draw = draw_tie(image, 155 + 300, 155 + 450, y_m - size_m[1] / 2, 30)
+    image, draw = draw_tie(image, 155 + 300, 155 + 450, y_m - size_m[1] / 2,
+                           30)
 
 
     # lyrics
@@ -162,7 +167,8 @@ def test_opencv():
 
     # text
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(img, 'String!', (0, 100), font, 5, (255, 255, 255), 10, cv2.LINE_AA)
+    cv2.putText(img, 'String!', (0, 100), font, 5, (255, 255, 255), 10,
+                cv2.LINE_AA)
 
     if os.name == 'nt':
         filename = Path.home() / 'DeskTop' / 'test_opencv.png'
