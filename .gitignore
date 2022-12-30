@@ -93,9 +93,3 @@ ENV/
 # others
 *~
 /.idea/
-/images/
-*.gz
-/latex/slides.tex
-/latex/line*.tex
-/latex/*.aux
-/latex/*.pdf
