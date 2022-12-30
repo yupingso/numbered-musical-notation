@@ -400,7 +400,7 @@ class Song:
                 triplet = Fraction(1)
                 if '/3' in duration:
                     triplet = Fraction(2, 3)
-                if time.lower:
+                if time.hyphen:
                     if pitches.startswith('[') and pitches.endswith(']'):
                         duration = (Fraction(dashes + 1, 1 << underlines)
                                     * (Fraction(2) - Fraction(1, 1 << dots))
@@ -1015,7 +1015,7 @@ def parse_key(s):
 
 def parse_time(s):
     """Convert time signature string to a pair of integers."""
-    hyphen = 4
+    hyphen = None
     ss = s.split(maxsplit=1)
     if len(ss) > 1:
         hyphen = ss[1].replace(' ', '')
