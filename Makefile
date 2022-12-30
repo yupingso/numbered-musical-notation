@@ -16,7 +16,7 @@ pdf: latex
 .PHONY: image
 image: pdf
 	rm -f $(IMAGE_DIR)/main*.jpg
-	convert -density 200 $(LATEX_DIR)/main.pdf $(IMAGE_DIR)/main.jpg
+	convert -density 200 $(LATEX_DIR)/main.pdf "$(IMAGE_DIR)/main-%02d.jpg"
 
 .PHONY: lint
 lint:
