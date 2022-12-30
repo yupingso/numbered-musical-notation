@@ -98,4 +98,3 @@ ENV/
 /latex/line*.tex
 /latex/*.aux
 /latex/*.pdf
-/run.sh
