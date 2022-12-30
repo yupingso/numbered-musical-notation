@@ -126,7 +126,6 @@ def test_pillow():
         draw = ImageDraw.Draw(image)
         return image, draw
 
-
     # melody
     y_m = 295
     draw_melody(draw, 155, y_m, '5')
@@ -141,7 +140,6 @@ def test_pillow():
     image, draw = draw_tie(image, 155, 155 + 150, y_m - size_m[1] / 2, 30)
     image, draw = draw_tie(image, 155 + 300, 155 + 450, y_m - size_m[1] / 2,
                            30)
-
 
     # lyrics
     draw_lyrics(draw, 155, 500, '每')

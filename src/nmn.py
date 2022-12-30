@@ -1,4 +1,3 @@
-import sys
 import os
 import re
 from fractions import Fraction
@@ -218,7 +217,7 @@ class Note:
         oct_str = {-2: ',,', -1: ',', 0: '', 1: "'", 2: '"'}
         return '{}{}{:2} {:4}'.format(
                 acc_str[self.acc], self.name, oct_str[self.octave],
-                str(self.duration), self.tie)
+                str(self.duration))
 
 
 class NodeType(Enum):
@@ -358,15 +357,6 @@ class Song:
             '<lyrics> {}'.format(self.lyrics),
         ]
         return '\n'.join(lines)
-
-    def print(self):
-        print('<key> {}'.format(self.key))
-        for time, notes in self.melody:
-            print('{}'.format('<time> {}/{}'.format(*time)))
-            for note in notes:
-                print('    {}'.format(note))
-        for tag, lyrics in self.lyrics:
-            print('<{}> {}'.format(tag, lyrics))
 
     def append_time_signature(self, time, s):
         """Append bars to self.melody.
@@ -838,7 +828,8 @@ class Song:
                                 height += 1
                             elif node.text in '海':
                                 height += 1.5
-                            text = '{0}{1}{0}'.format('\phantom{|}', node.text)
+                            text = '{0}{1}{0}'.format(r'\phantom{|}',
+                                                      node.text)
                             if first_text_idx is None:
                                 first_text_idx = idx
                             line_output.append(r'\node[lyrics] (t{0}) at '
