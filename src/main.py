@@ -6,7 +6,7 @@ import sys
 import nmn
 
 
-def main(input_dir, to_tex=False):
+def main(input_dir, latex_dir=None):
     cur_dir = os.path.abspath('.')
     if input_dir:
         input_dir = os.path.join(cur_dir, input_dir)
@@ -17,8 +17,8 @@ def main(input_dir, to_tex=False):
 
     song = nmn.load_song(melody_file, lyrics_file)
 
-    if to_tex:
-        song.to_tex_tikzpicture(os.path.join(cur_dir, 'latex/'))
+    if latex_dir:
+        song.to_tex_tikzpicture(os.path.join(cur_dir, latex_dir))
     else:
         sections = song.merge_melody_lyrics(_debug=True)
         song.group_underlines(sections)
@@ -27,9 +27,9 @@ def main(input_dir, to_tex=False):
 
 if __name__ == '__main__':
     input_dir = None
-    to_tex = False
+    latex_dir = None
     if len(sys.argv) > 1:
         input_dir = sys.argv[1]
-        if len(sys.argv) > 2 and sys.argv[2] == 'latex':
-            to_tex = True
-    main(input_dir, to_tex)
+        if len(sys.argv) > 2:
+            latex_dir = sys.argv[2]
+    main(input_dir, latex_dir)

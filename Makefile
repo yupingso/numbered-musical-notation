@@ -7,7 +7,7 @@ all: image
 
 .PHONY: latex
 latex:
-	src/main.py $(INPUT) latex
+	src/main.py $(INPUT) $(LATEX_DIR)
 
 .PHONY: pdf
 pdf: latex

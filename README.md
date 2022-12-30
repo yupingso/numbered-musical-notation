@@ -24,7 +24,7 @@ https://ctan.org/tex-archive/fonts/fdsymbol?lang=en, and copy `latex/texmf` to
 `~/`.
 
 ## Running Examples
-* Run `python3 src/main.py examples/input/ latex` to generate tex files, which will be saved inside latex directory.
+* Run `python3 src/main.py examples/input/ latex/` to generate tex files, which will be saved inside latex directory.
 * Run `cd latex/` and `xelatex main.tex` to generate main.pdf.
 
 ## Converting PDF to images
