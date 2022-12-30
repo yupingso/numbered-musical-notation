@@ -1,3 +1,4 @@
 flake8>=6
 pytest>=7
+pytest-cov>=4
 python-pptx
