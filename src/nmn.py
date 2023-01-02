@@ -703,7 +703,7 @@ class Song:
         """Write environment tikzpicture source code to file if provided."""
         slides_file = os.path.join(output_dir, 'slides.tex')
         slides_output = []
-        line_file_format = os.path.join(output_dir, 'line-{}{:02d}.tex')
+        line_file_format = os.path.join(output_dir, 'line-{:02d}-{:d}.tex')
         page_count = 0
 
         sections = self.merge_melody_lyrics()
@@ -897,7 +897,7 @@ class Song:
                 line_output[0] = (line_output[0]
                                   + '[xscale={}]'.format(95 / pos))
 
-                line_file = line_file_format.format(chr(ord('a') + i), j)
+                line_file = line_file_format.format(i, j)
                 with open(line_file, 'w', encoding='utf-8') as f:
                     f.write('\n'.join(line_output))
                 line_count += 1
