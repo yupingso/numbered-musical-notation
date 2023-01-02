@@ -16,9 +16,10 @@ def main(input_dir, latex_dir=None):
     if latex_dir:
         song.to_tex_tikzpicture(os.path.join(cur_dir, latex_dir))
     else:
-        sections = song.merge_melody_lyrics()
-        song.group_underlines(sections)
-        song.print(sections)
+        song.merge_melody_lyrics()
+        pages = nmn.Formatter().gen_song_pages(song)
+        song.group_underlines(pages)
+        song.print(pages)
 
 
 if __name__ == '__main__':

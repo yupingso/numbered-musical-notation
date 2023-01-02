@@ -64,6 +64,11 @@ class Note:
                 self.lines = -underlines
             self.dots = dots
         self.tie = list(tie)
+        self.is_leading_rest = False
+        self.word = None
+        self.tag = None
+        self.is_new_lyrics_line = False
+        self.is_last_cont_word = False
 
     @property
     def name(self):
@@ -88,6 +93,7 @@ class Note:
         note.lines = self.lines
         note.dots = self.dots
         note.tie = self.tie.copy()
+        note.is_leading_rest = self.is_leading_rest
         return note
 
     @classmethod
@@ -233,6 +239,7 @@ class Note:
                 subnote.tie[0] = True
                 if note._name == Note.REST_TO_MATCH_LYRICS:
                     subnote._name = Note.REST
+                subnote.is_leading_rest = False
             subnotes.append(subnote)
             debug_log.append('   > {}'.format(subnote))
             beat = end_beat
@@ -383,6 +390,100 @@ def parse_pitch(key, s):
     return acc, name, octave
 
 
+class Formatter:
+    """Output formatter of Song."""
+
+    def __init__(self):
+        self.lines_per_page = 2
+        self.new_page_on_tag = True
+
+    def gen_song_pages(self, song):
+        """Generate pages, each contains lines of nodes.
+
+        pages: list of page
+        page: list of (tag, list of lines) tuples
+        line: [nodes, list of bars, list of ties, list of slurs]
+        bar: (time, start_beat, node indices)
+        tie: (node_idx1, node_idx2)
+        """
+        # Split notes into pages and lines
+        line_node_idx_prev = -1
+        potential_slur_start_line_node_idx = None
+        pages = []
+        for time, start_beat, notes in song.melody:
+            beat = start_beat
+            for k, note in enumerate(notes):
+                # new page
+                if (not pages
+                        or (note.is_new_lyrics_line
+                            and len(pages[-1][1]) % self.lines_per_page == 0)
+                        or (self.new_page_on_tag and note.tag)):
+                    lines = []
+                    pages.append((note.tag, lines))
+                else:
+                    lines = pages[-1][1]
+
+                # new line
+                if not lines or note.is_new_lyrics_line:
+                    # TODO: Use tuple
+                    line = [[], [], [], []]   # [nodes, bars, ties, slurs]
+                    lines.append(line)
+                else:
+                    line = lines[-1]
+
+                nodes, bars, ties, slurs = line
+                line_node_idx = len(nodes)
+
+                # new bar
+                if k == 0 or not bars:
+                    # TODO: Remove beat
+                    bars.append((time, beat, []))
+
+                # handle slurs
+                if note.name:
+                    if not note.tie[0]:
+                        if note.word == '~':
+                            # check if note is the slur end note
+                            if note.is_last_cont_word:
+                                if potential_slur_start_line_node_idx is None:
+                                    raise ValueError(
+                                            'start note of slur not found')
+                                slurs.append(
+                                        (potential_slur_start_line_node_idx,
+                                         line_node_idx))
+                                potential_slur_start_line_node_idx = None
+                        else:
+                            potential_slur_start_line_node_idx = line_node_idx
+                else:
+                    # rest (note 0) cannot in a slur
+                    potential_slur_start_line_node_idx = None
+
+                # append note Node
+                node = Node(note)
+                bars[-1][-1].append(line_node_idx)
+                if note.tie[0]:
+                    ties.append((line_node_idx_prev, line_node_idx))
+                    node.value.tie[0] = True
+                    nodes[line_node_idx_prev].value.tie[1] = True
+                else:
+                    if note.name:
+                        if note.word != '~':
+                            node.text = note.word
+                nodes.append(node)
+                line_node_idx_prev = line_node_idx
+                # append dash Node's
+                for _ in range(node.lines):
+                    bars[-1][-1].append(len(nodes))
+                    nodes.append(Node('-'))
+                # append dot Node's
+                for _ in range(node.dots):
+                    bars[-1][-1].append(len(nodes))
+                    nodes.append(Node('.'))
+                beat += note.duration
+
+        return pages
+
+
 class Song:
     """Member variables.
 
@@ -427,6 +528,7 @@ class Song:
                    + '(~?)')
 
         bars = s.split('|')
+        prev_note = None
         for i, bar in enumerate(bars):
             if not bar:
                 continue
@@ -480,7 +582,10 @@ class Song:
                     # new Note
                     note = Note(acc, name, octave, duration, dashes,
                                 underlines, dots, tie)
+                    if not name and (not prev_note or prev_note.name):
+                        note.is_leading_rest = True
                     note_list.append(note)
+                    prev_note = note
                     bar_duration += duration
             assert note_list
 
@@ -515,6 +620,7 @@ class Song:
                     sub_note.duration = sub_duration
                     if not first:
                         sub_note.tie[0] = True
+                        sub_note.is_leading_rest = False
                     self.melody[-1][-1].append(sub_note)
                     remaining_duration -= sub_duration
                     beat += sub_duration
@@ -561,120 +667,44 @@ class Song:
             notes[:] = subnotes
 
     def merge_melody_lyrics(self):
-        """Return a list of sections.
+        """Merge self.lyrics into self.melody.
 
-        section: (tag, lines)
-        line: [nodes, list of bars, list of ties, list of slurs]
-        bar: (time, start_beat, node indices)
-        tie: (node_idx1, node_idx2)
+        The notes will be modified in place.
         """
-        # calculate split indices according to self.lyrics
-        sum_len = 0
-        split_sections = {}
-        split_lines = []
-        for i, (tag, lyrics) in enumerate(self.lyrics):
-            split_sections[sum_len] = tag
-            for j, s in enumerate(lyrics):
-                if s.startswith('~'):
-                    raise ValueError("a line of lyrics cannot start with '~' "
-                                     "({})".format(s))
-                split_lines.append(sum_len)
-                sum_len += len(s)
-        all_lyrics = ''.join([''.join(section[1]) for section in self.lyrics])
-        num_words = len(all_lyrics)     # contains '~'
-
-        # split melody
+        num_words = len(self.lyrics)    # including '~'
         lyrics_idx = 0
-        # whether these are added for this lyrics_idx
-        section_added, line_added = False, False
-        line_node_idx_prev = -1
-        potential_slur_start_line_node_idx = None
-        sections = []
         for time, start_beat, notes in self.melody:
-            beat = start_beat
             for k, note in enumerate(notes):
-                # new section
-                tag = split_sections.get(lyrics_idx)
-                if tag and not section_added:
-                    if note.may_start_new_line:
-                        sections.append((tag, []))
-                        section_added = True
-                # new line
-                if lyrics_idx in split_lines and not line_added:
-                    if note.may_start_new_line:
-                        # (nodes, bars, ties, slurs)
-                        sections[-1][1].append([[], [], [], []])
-                        line_added = True
-                        line_node_idx_prev = -1
-                        potential_slur_start_line_node_idx = None
-                line = sections[-1][1][-1]
-                nodes, bars, ties, slurs = line
-                line_node_idx = len(nodes)
-                # new bar
-                if k == 0 or not bars:
-                    bars.append((time, beat, []))
-                # handle slurs
-                if not note.is_rest:
-                    if not note.tie[0]:
-                        if all_lyrics[lyrics_idx] == '~':
-                            # check if lyrics_idx is the slur end node
-                            if (lyrics_idx == num_words - 1
-                                    or all_lyrics[lyrics_idx + 1] != '~'):
-                                if potential_slur_start_line_node_idx is None:
-                                    raise ValueError(
-                                            'start note of slur not found')
-                                slurs.append(
-                                        (potential_slur_start_line_node_idx,
-                                         line_node_idx))
-                                potential_slur_start_line_node_idx = None
-                        else:
-                            potential_slur_start_line_node_idx = line_node_idx
-                else:
-                    # rest cannot in a slur
-                    potential_slur_start_line_node_idx = None
-                # append note Node
-                node = Node(note)
-                bars[-1][-1].append(line_node_idx)
-                if note.tie[0]:
-                    ties.append((line_node_idx_prev, line_node_idx))
-                    node.value.tie[0] = True
-                    nodes[line_node_idx_prev].value.tie[1] = True
-                else:
-                    if note.to_match_lyrics:
-                        if lyrics_idx >= num_words:
-                            raise ValueError('#notes > {} words'
-                                             .format(num_words))
-                        lyrics = all_lyrics[lyrics_idx]
-                        if note.is_rest:
-                            if lyrics != 'O':
-                                raise ValueError(
-                                    f'note O cannot match lyrics "{lyrics}"')
-                        elif lyrics != '~':
-                            node.text = lyrics
-                        lyrics_idx += 1
-                        section_added, line_added = False, False
-                nodes.append(node)
-                line_node_idx_prev = line_node_idx
-                # append dash Node's
-                for _ in range(node.lines):
-                    bars[-1][-1].append(len(nodes))
-                    nodes.append(Node('-'))
-                # append dot Node's
-                for _ in range(node.dots):
-                    bars[-1][-1].append(len(nodes))
-                    nodes.append(Node('.'))
-                beat += note.duration
+                if not note.to_match_lyrics:
+                    continue
+
+                # Attach the lyric to the note
+                if lyrics_idx >= num_words:
+                    raise ValueError('#notes > {} words'.format(num_words))
+
+                (word, tag, is_new_lyrics_line,
+                 is_last_cont_word) = self.lyrics[lyrics_idx]
+                if note.is_rest:
+                    if word != 'O':
+                        raise ValueError(
+                            f'note O cannot match lyrics "{word}"')
+                assert word
+                note.word = word
+                if tag:
+                    note.tag = tag
+                note.is_new_lyrics_line = is_new_lyrics_line
+                note.is_last_cont_word = is_last_cont_word
+                lyrics_idx += 1
+
         if lyrics_idx != num_words:
             raise ValueError('{} notes != {} words'
                              .format(lyrics_idx, num_words))
 
-        return sections
-
     @classmethod
-    def group_underlines(cls, sections):
+    def group_underlines(cls, pages):
         """Group underlines shared by contiguous notes.
 
-        Also find triplets by modifying sections in place.
+        Also find triplets by modifying pages in place.
 
         section: (tag, lines)
         line: [nodes, bars, ties, slurs, underlines_list, triplets]
@@ -685,7 +715,7 @@ class Song:
             underline: [node_idx1, node_idx2]
         triplet: [node_idx1, node_idx2, node_idx3]
         """
-        for tag, lines in sections:
+        for tag, lines in pages:
             for line in lines:
                 nodes, bars, ties, slurs = line
                 underlines_list = [None]
@@ -736,40 +766,37 @@ class Song:
                 line.append(underlines_list)
                 line.append(triplets)
 
-    def to_tex_tikzpicture(self, output_dir=''):
+    def to_tex_tikzpicture(self, output_dir='', formatter=None):
         """Write environment tikzpicture source code to file if provided."""
         slides_file = os.path.join(output_dir, 'slides.tex')
         slides_output = []
         line_file_format = os.path.join(output_dir, 'line-{:02d}-{:d}.tex')
-        page_count = 0
 
-        sections = self.merge_melody_lyrics()
-        self.group_underlines(sections)
+        self.merge_melody_lyrics()
+        if not formatter:
+            formatter = Formatter()
+        pages = formatter.gen_song_pages(self)
+        self.group_underlines(pages)
 
-        for i, (tag, lines) in enumerate(sections):
-            # new section
+        for i, (tag, lines) in enumerate(pages):
+            # new page
             line_count = 0
+            if i > 0:
+                slides_output.append('\n')
+            slides_output.append('%%%%% PAGE {} %%%%%'.format(i + 1))
+            slides_output.append(r'\newpage')
+            slides_output.append('')
+            if tag:
+                slides_output.append('% <{}>'.format(tag))
+                slides_output.append(r'\begin{nmntag}')
+                slides_output.append(r'\textmd{$<$\hspace{-0pt}' + tag
+                                     + r'\hspace{-0pt}$>$}')
+                slides_output.append(r'\end{nmntag}')
+            else:
+                slides_output.append(r'\begin{nmnblank}')
+                slides_output.append(r'\end{nmnblank}')
             for j, (nodes, bars, ties, slurs, underlines_list,
                     triplets) in enumerate(lines):
-                # new page
-                if line_count % 2 == 0:
-                    page_count += 1
-                    if page_count > 1:
-                        slides_output.append('\n')
-                    slides_output.append('%%%%% PAGE {} %%%%%'
-                                         .format(page_count))
-                    slides_output.append(r'\newpage')
-                    slides_output.append('')
-                    if j == 0:      # first page in section
-                        slides_output.append('% <{}>'.format(tag))
-                        slides_output.append(r'\begin{nmntag}')
-                        slides_output.append(r'\textmd{$<$\hspace{-0pt}' + tag
-                                             + r'\hspace{-0pt}$>$}')
-                        slides_output.append(r'\end{nmntag}')
-                    else:
-                        slides_output.append(r'\begin{nmnblank}')
-                        slides_output.append(r'\end{nmnblank}')
-
                 # new line
                 line_lyrics = ''
                 line_output = []
@@ -942,9 +969,10 @@ class Song:
             f.write('\n'.join(slides_output))
 
     @classmethod
-    def print(cls, sections):
-        for tag, lines in sections:
-            print('{:=^80}'.format(' ' + tag + ' '))
+    def print(cls, pages):
+        for tag, lines in pages:
+            if tag:
+                print('{:=^80}'.format(' ' + tag + ' '))
             for nodes, bars, ties, slurs, underlines_list, triplets in lines:
                 print('-' * 50)
                 for time, start_beat, a in bars:
@@ -1091,6 +1119,7 @@ def load_song(melody_file, lyrics_file=None):
     song.try_split_notes()
 
     # lyrics
+    new_tag = None
     with open(lyrics_file, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -1102,12 +1131,22 @@ def load_song(melody_file, lyrics_file=None):
             elif not s or s.startswith('//'):
                 continue
             elif s.startswith('<tag>'):
-                tag = s[5:]
-                song.lyrics.append((tag, []))
+                if new_tag:
+                    raise ValueError(f"<tag> {new_tag} doesn't contain lyrics")
+                new_tag = s[5:]
             else:
-                if not song.lyrics:
-                    raise ValueError('no <tag> specified before {}'
-                                     .format(line))
-                song.lyrics[-1][1].append(s)
+                # Only attach the tag to the first word
+                is_new_line = True
+                for i, word in enumerate(s):
+                    if is_new_line and word == '~':
+                        raise ValueError(
+                            'a line of lyrics cannot start with "~" ({})'
+                            .format(s))
+                    is_last_cont_word = (
+                        word == '~' and (i == len(s) - 1 or s[i+1] != '~'))
+                    song.lyrics.append((word, new_tag, is_new_line,
+                                        is_last_cont_word))
+                    new_tag = None
+                    is_new_line = False
 
     return song
