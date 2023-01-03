@@ -1,17 +1,13 @@
-#! /usr/bin/env python3
-
+#!/usr/bin/env python3
 import os
-import sys
+import argparse
 
 import nmn
 
 
 def main(input_dir, latex_dir=None):
     cur_dir = os.path.abspath('.')
-    if input_dir:
-        input_dir = os.path.join(cur_dir, input_dir)
-    else:
-        input_dir = os.path.join(cur_dir, 'input')
+    input_dir = os.path.join(cur_dir, input_dir)
     melody_file = os.path.join(input_dir, 'melody.txt')
     lyrics_file = os.path.join(input_dir, 'lyrics.txt')
 
@@ -26,10 +22,8 @@ def main(input_dir, latex_dir=None):
 
 
 if __name__ == '__main__':
-    input_dir = None
-    latex_dir = None
-    if len(sys.argv) > 1:
-        input_dir = sys.argv[1]
-        if len(sys.argv) > 2:
-            latex_dir = sys.argv[2]
-    main(input_dir, latex_dir)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_dir')
+    parser.add_argument('latex_dir', nargs='?')
+    args = parser.parse_args()
+    main(args.input_dir, args.latex_dir)
