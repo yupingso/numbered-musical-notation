@@ -511,7 +511,7 @@ class Song:
                 beat += note.duration
             notes[:] = subnotes
 
-    def merge_melody_lyrics(self, _debug=False):
+    def merge_melody_lyrics(self):
         """Return a list of sections.
 
         section: (tag, lines)
@@ -519,8 +519,6 @@ class Song:
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
-        debug_log = []
-
         # calculate split indices according to self.lyrics
         sum_len = 0
         split_sections = {}
@@ -625,11 +623,6 @@ class Song:
         if lyrics_idx != num_words:
             raise ValueError('{} notes != {} words'
                              .format(lyrics_idx, num_words))
-
-        if _debug:
-            os.makedirs('log', exist_ok=True)
-            with open('log/merge.log', 'w') as f:
-                f.write('\n'.join(debug_log))
 
         return sections
 

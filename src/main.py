@@ -16,7 +16,7 @@ def main(input_dir, latex_dir=None):
     if latex_dir:
         song.to_tex_tikzpicture(os.path.join(cur_dir, latex_dir))
     else:
-        sections = song.merge_melody_lyrics(_debug=True)
+        sections = song.merge_melody_lyrics()
         song.group_underlines(sections)
         song.print(sections)
 
