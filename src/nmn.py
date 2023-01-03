@@ -577,12 +577,6 @@ class Song:
         potential_slur_start_line_node_idx = None
         sections = []
         for time, start_beat, notes in self.melody:
-            if time.upper is None:
-                time_duration = None
-            elif time.lower == 4:
-                time_duration = Fraction(time.upper)
-            else:
-                time_duration = Fraction(time.upper, 2)
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
@@ -595,8 +589,7 @@ class Song:
                 if (not note.tie[0] and not line_added
                         and lyrics_idx in split_lines):
                     # do not start a new line with a rest
-                    if (not note.to_match_lyrics and sections[-1][1]
-                            and (beat + note.duration) % time_duration == 0):
+                    if not note.to_match_lyrics and sections[-1][1]:
                         pass
                     else:
                         # (nodes, bars, ties, slurs)
