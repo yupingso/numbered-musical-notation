@@ -1,0 +1,234 @@
+====================================== 主歌 ======================================
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  3,  1/2  u1  將
+    <node 01>  4,  1/2  u1  自
+<time> 4/4 beat=0
+    <node 02>  5,  1    u0  己
+    <node 03>  3   1    u0  獻
+    <node 04>  2   1/2  u1  上
+    <node 05>  1   1/2  u1  當
+    <node 06>  7,  1/2  u1  作
+    <node 07>  6,  1/2  u1  活
+<time> 4/4 beat=0
+    <node 08>  5,  3    u0  祭
+    <node 09>  -
+    <node 10>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  4,  1/2  u1  作
+    <node 01>  5,  1/2  u1  主
+<time> 4/4 beat=0
+    <node 02>  6,  1    u0  聖
+    <node 03>  4   1    u0  潔
+    <node 04>  3   1/2  u1  貴
+    <node 05>  2   1/2  u1  重
+    <node 06>  1   1/2  u1  的
+    <node 07>  3   1/2  u1  器
+<time> 4/4 beat=0
+    <node 08>  2   3    u0  皿
+    <node 09>  -
+    <node 10>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  3,  1/2  u1  你
+    <node 01>  4,  1/2  u1  豐
+<time> 4/4 beat=0
+    <node 02>  5,  1    u0  富
+    <node 03>  3   1    u0  恩
+    <node 04>  2   1/2  u1  惠
+    <node 05>  1   1/2  u1  必
+    <node 06>  7,  1/2  u1  充
+    <node 07>  6,  1/2  u1  足
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  7,  1    u0  澆
+    <node 01>  2   1    u0  灌
+    <node 02>  1   1    u0  我
+    <node 03>  1   1/2  u1  使
+    <node 04>  7,  1/2  u1  我
+<time> 4/4 beat=0
+    <node 05>  6,  1/2  u1  瓦
+    <node 06>  7,  1/4  u2  器
+    <node 07>  1   1/4  u2  裡 ~
+    <node 08>  1   1/2  u1  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[3, 4], [5, 7], [8, 8]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3/2
+    <node 00>  2   1/2  u1  充
+    <node 01>  3   1/2  u1  滿
+    <node 02>  2   1/2  u1  莫
+    <node 03>  1   1/2  u1  大
+    <node 04>  7,  1/2  u1  能
+<time> 4/4 beat=0
+    <node 05>  1   3    u0  力
+    <node 06>  -
+    <node 07>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4]]
+<triplets> []
+====================================== 副歌 ======================================
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  3   1/2  u1  高
+    <node 01>  4   1/2  u1  舉
+<time> 4/4 beat=0
+    <node 02>  5   1    u0  雙
+    <node 03>  5   1    u0  手
+    <node 04>  5   1/2  u1  讚
+    <node 05>  4   1/2  u1  美
+    <node 06>  3   1/2  u1  你
+    <node 07>  2   1/2  u1  我
+<time> 4/4 beat=0
+    <node 08>  1   3    u0  主
+    <node 09>  -
+    <node 10>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  2   1/2  u1  全
+    <node 01>  3   1/2  u1  心
+<time> 4/4 beat=0
+    <node 02>  4   1    u0  全
+    <node 03>  4   1    u0  人
+    <node 04>  4   1/2  u1  都
+    <node 05>  3   1/2  u1  給
+    <node 06>  2   1/2  u1  你
+    <node 07>  1   1/2  u1  耶
+<time> 4/4 beat=0
+    <node 08>  2   3    u0  穌
+    <node 09>  -
+    <node 10>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  3   1/2  u1  一
+    <node 01>  4   1/2  u1  生
+<time> 4/4 beat=0
+    <node 02>  5   1    u0  意
+    <node 03>  5   1    u0  義
+    <node 04>  5   1/2  u1  活
+    <node 05>  4   1/2  u1  出
+    <node 06>  3   1/2  u1  榮
+    <node 07>  2   1/2  u1  耀
+<time> 4/4 beat=0
+    <node 08>  3   1    u0  的
+    <node 09>  2   1    u0  呼
+    <node 10>  1   1    u0  召
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  2   1/2  u1  勇
+    <node 01>  3   1/2  u1  敢
+<time> 4/4 beat=0
+    <node 02>  4   1    u0  地
+    <node 03>  4   1/2  u1  向
+    <node 04>  4   1/2  u1  著
+    <node 05>  4   1/2  u1  標
+    <node 06>  3   1/2  u1  竿
+    <node 07>  2   1/2  u1  直
+    <node 08>  1   1/2  u1  -
+<time> 4/4 beat=0
+    <node 09>  1   4    u0  跑
+    <node 10>  -
+    <node 11>  -
+    <node 12>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [3, 4], [5, 6], [7, 8]]
+<triplets> []
+====================================== 橋段 ======================================
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  6,  1    u0  跟
+    <node 01>  7,  1    u0  隨
+    <node 02>  1   1    u0  耶
+    <node 03>  2   1    u0  穌
+<time> 4/4 beat=0
+    <node 04>  5,  1    u0  愛
+    <node 05>  7,  1    u0  我
+    <node 06>  2   1    u0  的
+    <node 07>  1   1    u0  主
+<ties> []
+<slurs> []
+<underlines>
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  6,  1    u0  我
+    <node 01>  7,  1    u0  愛
+    <node 02>  1   1    u0  你
+    <node 03>  4   1    u0  耶
+<time> 4/4 beat=0
+    <node 04>  3   4    u0  穌
+    <node 05>  -
+    <node 06>  -
+    <node 07>  -
+<ties> []
+<slurs> []
+<underlines>
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  6,  1    u0  跟
+    <node 01>  7,  1    u0  隨
+    <node 02>  1   1    u0  耶
+    <node 03>  2   1    u0  穌
+<time> 4/4 beat=0
+    <node 04>  5,  1    u0  愛
+    <node 05>  7,  1    u0  我
+    <node 06>  2   1    u0  的
+    <node 07>  1   1    u0  主
+<ties> []
+<slurs> []
+<underlines>
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  6,  1    u0  我
+    <node 01>  7,  1    u0  愛
+    <node 02>  1   1    u0  你
+    <node 03>  2   1    u0  耶
+<time> 4/4 beat=0
+    <node 04>  1   3    u0  穌
+    <node 05>  -
+    <node 06>  -
+<ties> []
+<slurs> []
+<underlines>
+<triplets> []
