@@ -110,8 +110,8 @@
     <node 01>  2   1/2  u1  傻 ~
 <time> 4/4 beat=0
     <node 02>  2   1    u0  None
-    <node 03>  1,  1    u0  X
-    <node 04>  1,  1    u0  X
+    <node 03>  0   2    u0  None
+    <node 04>  -
 <ties> [(1, 2)]
 <slurs> []
 <underlines>

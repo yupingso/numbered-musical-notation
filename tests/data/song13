@@ -119,7 +119,7 @@
     <node 05>  -
 <time> 3/4 beat=0
     <node 06>  1   1    u0  None
-    <node 07>  1   1    u0  X
+    <node 07>  0   1    u0  None
 <ties> [(3, 6)]
 <slurs> []
 <underlines>
@@ -183,7 +183,7 @@
     <node 03>  -
 <time> 3/4 beat=0
     <node 04>  5   1    u0  None
-    <node 05>  1   1    u0  X
+    <node 05>  0   1    u0  None
 <ties> [(1, 4)]
 <slurs> []
 <underlines>

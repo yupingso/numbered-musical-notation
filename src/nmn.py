@@ -9,29 +9,45 @@ Time = namedtuple('Time', ['upper', 'lower', 'hyphen'])
 
 
 class Note:
-    """Member variables
+    """Musical note.
 
-    acc: accidental
-        None, -1 (flat), 1 (sharp), 0 (natural)
-    name: 0-7 as in numbered musical notation
-    octave: int
-    duration: Fraction
-    line: # dash or underline
-        line = 0: duration = 1
-        line < 0: duration = 2 ** line
-        line > 0: dash = line
-    dot: # dots
-    tie: 2-tuple of bool
-        tie[0] = True: tied with the previous Note
-        tie[1] = True: tied with the next Note
+    Member variables:
+        line: # dash or underline
+            line = 0: duration = 1
+            line < 0: duration = 2 ** line
+            line > 0: dash = line
+
     """
+
+    REST = 0
+    REST_TO_MATCH_LYRICS = -1
 
     possible_ends = {}
 
     def __init__(self, acc, name, octave=0, duration=Fraction(1), dashes=0,
                  underlines=0, dots=0, tie=(False, False)):
+        """Initialize a note.
+
+        Args:
+            acc: accidental
+                None, -1 (flat), 1 (sharp), 0 (natural)
+            name: 1-7 as in numbered musical notation
+                0 (REST) for a rest
+                -1 (REST_TO_MATCH_LYRICS) for a rest, which will be matched to
+                lyrics
+            octave (int)
+            duration (Fraction)
+            dashes (int): Number of dashes
+            underlines (int): Number of underlines
+            dots (int): Number of dots
+            tie (tuple):
+                tie[0] = True: tied with the previous Note
+                tie[1] = True: tied with the next Note
+
+        """
+
         self.acc = acc
-        self.name = name
+        self._name = name
         self.octave = octave
         self.duration = duration
         if dashes is None:
@@ -45,8 +61,20 @@ class Note:
             self.dots = dots
         self.tie = list(tie)
 
+    @property
+    def name(self):
+        return self._name if self._name >= 0 else 0
+
+    @property
+    def is_rest(self):
+        return self._name <= 0
+
+    @property
+    def to_match_lyrics(self):
+        return self._name > 0 or self._name == self.REST_TO_MATCH_LYRICS
+
     def copy(self):
-        note = Note(self.acc, self.name, self.octave, self.duration)
+        note = Note(self.acc, self._name, self.octave, self.duration)
         note.lines = self.lines
         note.dots = self.dots
         note.tie = self.tie.copy()
@@ -193,12 +221,14 @@ class Note:
                     subnote.tie[1] = True
             else:
                 subnote.tie[0] = True
+                if note._name == Note.REST_TO_MATCH_LYRICS:
+                    subnote._name = Note.REST
             subnotes.append(subnote)
             debug_log.append('   > {}'.format(subnote))
             beat = end_beat
 
         for i, subnote in enumerate(subnotes):
-            if note.name == 0:
+            if note.is_rest:
                 subnote.tie[0] = False
                 subnote.tie[1] = False
             else:
@@ -300,7 +330,9 @@ def parse_pitch(key, s):
     acc = acc_dict[acc]
     octave = octave.count("'") - octave.count(',')
     if name == '0':
-        acc, name, octave = None, 0, 0
+        acc, name, octave = None, Note.REST, 0
+    elif name == 'O':
+        acc, name, octave = None, Note.REST_TO_MATCH_LYRICS, 0
     elif key == 'solfa':
         if name in '1234567':
             name = int(name)
@@ -329,8 +361,11 @@ def parse_pitch(key, s):
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
     assert acc in [None, -1, 0, 1]
-    assert name in [0, 1, 2, 3, 4, 5, 6, 7]
+    assert name in [Note.REST_TO_MATCH_LYRICS, Note.REST, 1, 2, 3, 4, 5, 6, 7]
     assert octave in [-1, 0, 1]
+    if name in (Note.REST_TO_MATCH_LYRICS, Note.REST):
+        assert acc is None
+        assert octave == 0
     return acc, name, octave
 
 
@@ -486,7 +521,7 @@ class Song:
             for note in notes:
                 if prev_tie:
                     note.tie[0] = True
-                if note.name == 0:
+                if note.is_rest:
                     note.tie = [False, False]
                 prev_tie = note.tie[1]
         self.melody[0][-1][0].tie[0] = False    # first note
@@ -559,7 +594,8 @@ class Song:
                 # new line
                 if (not note.tie[0] and not line_added
                         and lyrics_idx in split_lines):
-                    if (sections[-1][1] and note.name == 0
+                    # do not start a new line with a rest
+                    if (not note.to_match_lyrics and sections[-1][1]
                             and (beat + note.duration) % time_duration == 0):
                         pass
                     else:
@@ -575,7 +611,7 @@ class Song:
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
                 # handle slurs
-                if note.name:
+                if not note.is_rest:
                     if not note.tie[0]:
                         if all_lyrics[lyrics_idx] == '~':
                             # check if lyrics_idx is the slur end node
@@ -591,7 +627,7 @@ class Song:
                         else:
                             potential_slur_start_line_node_idx = line_node_idx
                 else:
-                    # rest (note 0) cannot in a slur
+                    # rest cannot in a slur
                     potential_slur_start_line_node_idx = None
                 # append note Node
                 node = Node(note)
@@ -601,12 +637,17 @@ class Song:
                     node.value.tie[0] = True
                     nodes[line_node_idx_prev].value.tie[1] = True
                 else:
-                    if note.name:
+                    if note.to_match_lyrics:
                         if lyrics_idx >= num_words:
                             raise ValueError('#notes > {} words'
                                              .format(num_words))
-                        if all_lyrics[lyrics_idx] != '~':
-                            node.text = all_lyrics[lyrics_idx]
+                        lyrics = all_lyrics[lyrics_idx]
+                        if note.is_rest:
+                            if lyrics != 'O':
+                                raise ValueError(
+                                    f'note O cannot match lyrics "{lyrics}"')
+                        elif lyrics != '~':
+                            node.text = lyrics
                         lyrics_idx += 1
                         section_added, line_added = False, False
                 nodes.append(node)
@@ -755,13 +796,6 @@ class Song:
                         pos += 7.5
                     for idx in idx_list:
                         node = nodes[idx]
-                        # HACK: Replace 'X' with None
-                        if node.text == 'X':
-                            node.text = None
-                            note = node.value
-                            note.acc = None
-                            note.name = 0
-                            note.octave = 0
                         note = node.value
                         line_output.append('')
                         if node.type != NodeType.NOTE:

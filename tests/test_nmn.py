@@ -5,8 +5,15 @@ import pytest
 from nmn import Time, parse_pitch, parse_time
 
 
-def test_parse_pitch():
-    assert parse_pitch('solfa', '2') == (None, 2, 0)
+@pytest.mark.parametrize('key,s,expected_acc,expected_name,expected_octave', [
+    ('solfa', '2', None, 2, 0),
+    ('solfa', 'O', None, -1, 0),
+])
+def test_parse_pitch(key, s, expected_acc, expected_name, expected_octave):
+    acc, name, octave = parse_pitch(key, s)
+    assert acc == expected_acc
+    assert name == expected_name
+    assert octave == expected_octave
 
 
 @pytest.mark.parametrize('time,expected_time', [
