@@ -71,7 +71,9 @@ class Note:
 
     @property
     def to_match_lyrics(self):
-        return self._name > 0 or self._name == self.REST_TO_MATCH_LYRICS
+        return (not self.tie[0]
+                and (self._name > 0
+                     or self._name == self.REST_TO_MATCH_LYRICS))
 
     def copy(self):
         note = Note(self.acc, self._name, self.octave, self.duration)
@@ -577,28 +579,21 @@ class Song:
         potential_slur_start_line_node_idx = None
         sections = []
         for time, start_beat, notes in self.melody:
-            if time.upper is None:
-                time_duration = None
-            elif time.lower == 4:
-                time_duration = Fraction(time.upper)
-            else:
-                time_duration = Fraction(time.upper, 2)
             beat = start_beat
             for k, note in enumerate(notes):
                 # new section
-                if (not note.tie[0] and not section_added
-                        and lyrics_idx in split_sections):
-                    tag = split_sections[lyrics_idx]
-                    sections.append((tag, []))
-                    section_added = True
+                tag = split_sections.get(lyrics_idx)
+                if tag and not section_added:
+                    # may put a rest at the beginning of a line
+                    if note.to_match_lyrics or note.is_rest:
+                        assert not note.tie[0]
+                        sections.append((tag, []))
+                        section_added = True
                 # new line
-                if (not note.tie[0] and not line_added
-                        and lyrics_idx in split_lines):
-                    # do not start a new line with a rest
-                    if (not note.to_match_lyrics and sections[-1][1]
-                            and (beat + note.duration) % time_duration == 0):
-                        pass
-                    else:
+                if lyrics_idx in split_lines and not line_added:
+                    # may put a rest at the beginning of a line
+                    if note.to_match_lyrics or note.is_rest:
+                        assert not note.tie[0]
                         # (nodes, bars, ties, slurs)
                         sections[-1][1].append([[], [], [], []])
                         line_added = True
