@@ -20,7 +20,8 @@ class Note:
     """
 
     REST = 0
-    REST_TO_MATCH_LYRICS = -1
+    REST_AT_END = -1
+    REST_TO_MATCH_LYRICS = -2
 
     possible_ends = {}
 
@@ -32,8 +33,11 @@ class Note:
             acc: accidental
                 None, -1 (flat), 1 (sharp), 0 (natural)
             name: 1-7 as in numbered musical notation
-                0 (REST) for a rest
-                -1 (REST_TO_MATCH_LYRICS) for a rest, which will be matched to
+                0 (REST) for a rest, which may be placed at the beginning of a
+                line
+                -1 (REST_AT_END) for a rest, which may be placed at the end of
+                a line
+                -2 (REST_TO_MATCH_LYRICS) for a rest, which will be matched to
                 lyrics
             octave (int)
             duration (Fraction)
@@ -74,6 +78,10 @@ class Note:
         return (not self.tie[0]
                 and (self._name > 0
                      or self._name == self.REST_TO_MATCH_LYRICS))
+
+    @property
+    def may_start_new_line(self):
+        return self._name != self.REST_AT_END and not self.tie[0]
 
     def copy(self):
         note = Note(self.acc, self._name, self.octave, self.duration)
@@ -333,6 +341,8 @@ def parse_pitch(key, s):
     octave = octave.count("'") - octave.count(',')
     if name == '0':
         acc, name, octave = None, Note.REST, 0
+    elif name == 'o':
+        acc, name, octave = None, Note.REST_AT_END, 0
     elif name == 'O':
         acc, name, octave = None, Note.REST_TO_MATCH_LYRICS, 0
     elif key == 'solfa':
@@ -363,9 +373,10 @@ def parse_pitch(key, s):
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
     assert acc in [None, -1, 0, 1]
-    assert name in [Note.REST_TO_MATCH_LYRICS, Note.REST, 1, 2, 3, 4, 5, 6, 7]
+    assert name in [1, 2, 3, 4, 5, 6, 7, Note.REST, Note.REST_AT_END,
+                    Note.REST_TO_MATCH_LYRICS]
     assert octave in [-1, 0, 1]
-    if name in (Note.REST_TO_MATCH_LYRICS, Note.REST):
+    if name in (Note.REST, Note.REST_AT_END, Note.REST_TO_MATCH_LYRICS):
         assert acc is None
         assert octave == 0
     return acc, name, octave
@@ -584,16 +595,12 @@ class Song:
                 # new section
                 tag = split_sections.get(lyrics_idx)
                 if tag and not section_added:
-                    # may put a rest at the beginning of a line
-                    if note.to_match_lyrics or note.is_rest:
-                        assert not note.tie[0]
+                    if note.may_start_new_line:
                         sections.append((tag, []))
                         section_added = True
                 # new line
                 if lyrics_idx in split_lines and not line_added:
-                    # may put a rest at the beginning of a line
-                    if note.to_match_lyrics or note.is_rest:
-                        assert not note.tie[0]
+                    if note.may_start_new_line:
                         # (nodes, bars, ties, slurs)
                         sections[-1][1].append([[], [], [], []])
                         line_added = True

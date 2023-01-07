@@ -2,12 +2,17 @@ import inspect
 
 import pytest
 
-from nmn import Time, parse_pitch, parse_time
+from nmn import Time, Note, parse_pitch, parse_time
 
 
 @pytest.mark.parametrize('key,s,expected_acc,expected_name,expected_octave', [
     ('solfa', '2', None, 2, 0),
-    ('solfa', 'O', None, -1, 0),
+    ('solfa', '0', None, Note.REST, 0),
+    ('solfa', 'o', None, Note.REST_AT_END, 0),
+    ('solfa', 'O', None, Note.REST_TO_MATCH_LYRICS, 0),
+    ('C', '0', None, Note.REST, 0),
+    ('D', 'o', None, Note.REST_AT_END, 0),
+    ('G', 'O', None, Note.REST_TO_MATCH_LYRICS, 0),
 ])
 def test_parse_pitch(key, s, expected_acc, expected_name, expected_octave):
     acc, name, octave = parse_pitch(key, s)
