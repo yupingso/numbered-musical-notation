@@ -842,7 +842,7 @@ class Song:
                         # text
                         height = -17
                         if node.text:
-                            if node.text in '每悔':
+                            if node.text in '每悔毒':
                                 height += 1
                             elif node.text in '海':
                                 height += 1.5
