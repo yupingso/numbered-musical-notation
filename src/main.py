@@ -14,11 +14,9 @@ def main(input_dir, latex_dir=None):
     song = nmn.load_song(melody_file, lyrics_file)
 
     if latex_dir:
-        song.to_tex_tikzpicture(os.path.join(cur_dir, latex_dir))
+        song.output_to_tex(os.path.join(cur_dir, latex_dir))
     else:
-        sections = song.merge_melody_lyrics()
-        song.group_underlines(sections)
-        song.print(sections)
+        song.print()
 
 
 if __name__ == '__main__':

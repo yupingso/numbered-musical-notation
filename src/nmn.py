@@ -735,8 +735,39 @@ class Song:
                 line.append(underlines_list)
                 line.append(triplets)
 
-    def to_tex_tikzpicture(self, output_dir=''):
-        """Write environment tikzpicture source code to file if provided."""
+    def print(self):
+        """Print the song to stdout."""
+        sections = self.merge_melody_lyrics()
+        self.group_underlines(sections)
+
+        for tag, lines in sections:
+            print('{:=^80}'.format(' ' + tag + ' '))
+            for nodes, bars, ties, slurs, underlines_list, triplets in lines:
+                print('-' * 50)
+                for time, start_beat, a in bars:
+                    print('<time> {}/{} beat={}'
+                          .format(time.upper, time.lower, start_beat))
+                    for idx in a:
+                        try:
+                            print('    <node {:02d}> {}'
+                                  .format(idx, nodes[idx]))
+                        except UnicodeEncodeError:
+                            nodes[idx].text = '?'
+                            print('    <node {:02d}> {}'
+                                  .format(idx, nodes[idx]))
+                print('<ties> {}'.format(ties))
+                print('<slurs> {}'.format(slurs))
+                print('<underlines>')
+                for k, underlines in enumerate(underlines_list):
+                    if k >= 1:
+                        print('    depth {}: {}'.format(k, underlines))
+                print('<triplets> {}'.format(triplets))
+
+    def output_to_tex(self, output_dir=''):
+        """Output the song to latex files.
+
+        The tikzpicture package is used to draw the nodes.
+        """
         slides_file = os.path.join(output_dir, 'slides.tex')
         slides_output = []
         line_file_format = os.path.join(output_dir, 'line-{:02d}-{:d}.tex')
@@ -939,31 +970,6 @@ class Song:
 
         with open(slides_file, 'w', encoding='utf8') as f:
             f.write('\n'.join(slides_output))
-
-    @classmethod
-    def print(cls, sections):
-        for tag, lines in sections:
-            print('{:=^80}'.format(' ' + tag + ' '))
-            for nodes, bars, ties, slurs, underlines_list, triplets in lines:
-                print('-' * 50)
-                for time, start_beat, a in bars:
-                    print('<time> {}/{} beat={}'
-                          .format(time.upper, time.lower, start_beat))
-                    for idx in a:
-                        try:
-                            print('    <node {:02d}> {}'
-                                  .format(idx, nodes[idx]))
-                        except UnicodeEncodeError:
-                            nodes[idx].text = '?'
-                            print('    <node {:02d}> {}'
-                                  .format(idx, nodes[idx]))
-                print('<ties> {}'.format(ties))
-                print('<slurs> {}'.format(slurs))
-                print('<underlines>')
-                for k, underlines in enumerate(underlines_list):
-                    if k >= 1:
-                        print('    depth {}: {}'.format(k, underlines))
-                print('<triplets> {}'.format(triplets))
 
 
 def parse_key(s):
