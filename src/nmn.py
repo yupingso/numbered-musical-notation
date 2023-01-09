@@ -614,24 +614,23 @@ class Song:
                 if k == 0 or not bars:
                     bars.append((time, beat, []))
                 # handle slurs
-                if not note.is_rest:
-                    if not note.tie[0]:
-                        if all_lyrics[lyrics_idx] == '~':
-                            # check if lyrics_idx is the slur end node
-                            if (lyrics_idx == num_words - 1
-                                    or all_lyrics[lyrics_idx + 1] != '~'):
-                                if potential_slur_start_line_node_idx is None:
-                                    raise ValueError(
-                                            'start note of slur not found')
-                                slurs.append(
-                                        (potential_slur_start_line_node_idx,
-                                         line_node_idx))
-                                potential_slur_start_line_node_idx = None
-                        else:
-                            potential_slur_start_line_node_idx = line_node_idx
-                else:
+                if note.is_rest:
                     # rest cannot in a slur
                     potential_slur_start_line_node_idx = None
+                elif note.to_match_lyrics:
+                    if all_lyrics[lyrics_idx] == '~':
+                        # check if lyrics_idx is the slur end node
+                        if (lyrics_idx == num_words - 1
+                                or all_lyrics[lyrics_idx + 1] != '~'):
+                            if potential_slur_start_line_node_idx is None:
+                                raise ValueError(
+                                        'start note of slur not found')
+                            slurs.append(
+                                    (potential_slur_start_line_node_idx,
+                                     line_node_idx))
+                            potential_slur_start_line_node_idx = None
+                    else:
+                        potential_slur_start_line_node_idx = line_node_idx
                 # append note Node
                 node = Node(note)
                 bars[-1][-1].append(line_node_idx)
