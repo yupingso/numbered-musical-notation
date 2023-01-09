@@ -1087,8 +1087,8 @@ def load_song(melody_file, lyrics_file=None):
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)
-    song.make_ties_consistent()
     song.try_split_notes()
+    song.make_ties_consistent()
 
     # lyrics
     with open(lyrics_file, encoding='utf-8') as f:
