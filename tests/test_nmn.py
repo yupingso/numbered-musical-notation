@@ -7,6 +7,9 @@ from nmn import Time, Note, parse_pitch, parse_time
 
 @pytest.mark.parametrize('key,s,expected_acc,expected_name,expected_octave', [
     ('solfa', '2', None, 2, 0),
+    ('solfa', 'q', None, 1, 1),
+    ('solfa', '9', None, 2, 1),
+    ('solfa', 'b', None, 5, -1),
     ('solfa', '0', None, Note.REST, 0),
     ('solfa', 'o', None, Note.REST_AT_END, 0),
     ('solfa', 'O', None, Note.REST_TO_MATCH_LYRICS, 0),

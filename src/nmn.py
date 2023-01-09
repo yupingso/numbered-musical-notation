@@ -331,9 +331,10 @@ class Node:
 def parse_pitch(key, s):
     key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
     extended_upper_name_dict = dict(zip('qwertyu', range(1, 8)))
+    extended_upper_name_dict.update({'8': 1, '9': 2})
     extended_lower_name_dict = dict(zip('zxcvbnm', range(1, 8)))
     acc_dict = {'': None, '#': 1, '$': -1, '%': 0}
-    match = re.fullmatch(r"([#$%]?)([0-7a-zA-Z])([',]*)", s)
+    match = re.fullmatch(r"([#$%]?)([0-9a-zA-Z])([',]*)", s)
     if match is None:
         raise ValueError('wrong format for pitch {}'.format(s))
     acc, name, octave = match.groups()
