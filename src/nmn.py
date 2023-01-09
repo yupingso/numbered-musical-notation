@@ -2,7 +2,7 @@ import re
 from fractions import Fraction
 from collections import namedtuple
 
-from core import Note, Node, NodeType, Tie, Slur, Triplet
+from core import Note, Node, NodeType, Tie, Slur, Triplet, OutputLine
 from writer import LatexWriter
 
 
@@ -245,7 +245,7 @@ class Song:
         """Return a list of sections.
 
         section: (tag, lines)
-        line: [nodes, list of bars, list of ties, list of slurs]
+        line: OutputLine
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         """
@@ -283,13 +283,15 @@ class Song:
                 # new line
                 if lyrics_idx in split_lines and not line_added:
                     if note.may_start_new_line:
-                        # (nodes, bars, ties, slurs)
-                        sections[-1][1].append([[], [], [], []])
+                        sections[-1][1].append(OutputLine())
                         line_added = True
                         line_node_idx_prev = -1
                         potential_slur_start_line_node_idx = None
                 line = sections[-1][1][-1]
-                nodes, bars, ties, slurs = line
+                nodes = line.nodes
+                bars = line.bars
+                ties = line.ties
+                slurs = line.slurs
                 line_node_idx = len(nodes)
                 # new bar
                 if k == 0 or not bars:
@@ -357,7 +359,7 @@ class Song:
         Also find triplets by modifying sections in place.
 
         section: (tag, lines)
-        line: [nodes, bars, ties, slurs, underlines_list, triplets]
+        line: OutputLine
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
         underlines_list: list of underlines
@@ -367,16 +369,15 @@ class Song:
         """
         for tag, lines in sections:
             for line in lines:
-                nodes, bars, ties, slurs = line
                 underlines_list = [None]
                 triplets = []
                 triplet_duration = None
-                for time, start_beat, idx_list in bars:
+                for time, start_beat, idx_list in line.bars:
                     beat = start_beat
                     assert beat >= 0
                     idx_prev = -9
                     for idx in idx_list:
-                        node = nodes[idx]
+                        node = line.nodes[idx]
                         note = node.value
                         if node.type != NodeType.NOTE:
                             continue
@@ -413,8 +414,8 @@ class Song:
                                     underlines_list[k].append([idx, idx])
                         beat += note.duration
                         idx_prev = idx
-                line.append(underlines_list)
-                line.append([Triplet(*triplet) for triplet in triplets])
+                line.underlines_list = underlines_list
+                line.triplets = [Triplet(*triplet) for triplet in triplets]
 
     def print(self):
         """Print the song to stdout."""
@@ -423,9 +424,10 @@ class Song:
 
         for tag, lines in sections:
             print('{:=^80}'.format(' ' + tag + ' '))
-            for nodes, bars, ties, slurs, underlines_list, triplets in lines:
+            for line in lines:
+                nodes = line.nodes
                 print('-' * 50)
-                for time, start_beat, a in bars:
+                for time, start_beat, a in line.bars:
                     print('<time> {}/{} beat={}'
                           .format(time.upper, time.lower, start_beat))
                     for idx in a:
@@ -436,13 +438,13 @@ class Song:
                             nodes[idx].text = '?'
                             print('    <node {:02d}> {}'
                                   .format(idx, nodes[idx]))
-                print('<ties> {}'.format(ties))
-                print('<slurs> {}'.format(slurs))
+                print('<ties> {}'.format(line.ties))
+                print('<slurs> {}'.format(line.slurs))
                 print('<underlines>')
-                for k, underlines in enumerate(underlines_list):
+                for k, underlines in enumerate(line.underlines_list):
                     if k >= 1:
                         print('    depth {}: {}'.format(k, underlines))
-                print('<triplets> {}'.format(triplets))
+                print('<triplets> {}'.format(line.triplets))
 
     def output_to_tex(self, output_dir):
         """Output the song to latex files.

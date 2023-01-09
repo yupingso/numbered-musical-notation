@@ -369,3 +369,27 @@ class Triplet(NodeRange):
 
     def __repr__(self):
         return repr(list(self._nodes))
+
+
+class OutputLine:
+    """A line of output.
+
+    Attributes:
+        nodes: List of Node.
+        bars: List of tuples (time, beat, node indices), where the node index
+            is the index of Node in `nodes`.
+        ties: List of Tie.
+        slurs: List of Slur.
+        underlines_list: List of lists of underlines, where underlines_list[k]
+            is the list of underlines of depth k.
+        triplets: List of Triplet.
+
+    """
+
+    def __init__(self):
+        self.nodes = []
+        self.bars = []
+        self.ties = []
+        self.slurs = []
+        self.underlines_list = []
+        self.triplets = []

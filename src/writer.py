@@ -20,8 +20,9 @@ class LatexWriter:
         for i, (tag, lines) in enumerate(self._sections):
             # new section
             line_count = 0
-            for j, (nodes, bars, ties, slurs, underlines_list,
-                    triplets) in enumerate(lines):
+            for j, line in enumerate(lines):
+                nodes = line.nodes
+
                 # new page
                 if line_count % 2 == 0:
                     page_count += 1
@@ -61,7 +62,7 @@ class LatexWriter:
 
                 pos = 0
                 first_text_idx = None
-                for k, (time, start_beat, idx_list) in enumerate(bars):
+                for k, (time, start_beat, idx_list) in enumerate(line.bars):
                     # new bar
                     if k > 0:
                         pos -= 2.5
@@ -136,7 +137,7 @@ class LatexWriter:
 
                 # ties
                 line_output.append('\n\n% ties')
-                for r in ties:
+                for r in line.ties:
                     dis = 2
                     if nodes[r.start].value.octave >= 1:
                         dis = 5
@@ -147,7 +148,7 @@ class LatexWriter:
 
                 # slurs
                 line_output.append('\n\n% slurs')
-                for idx0, idx1 in slurs:
+                for idx0, idx1 in line.slurs:
                     dis = 3
                     if nodes[r.start].value.octave >= 1:
                         dis = 6
@@ -158,7 +159,7 @@ class LatexWriter:
 
                 # underlines
                 line_output.append('\n\n% underlines')
-                for depth, underlines in enumerate(underlines_list):
+                for depth, underlines in enumerate(line.underlines_list):
                     if depth == 0:
                         continue
                     for idx0, idx1 in underlines:
@@ -171,7 +172,7 @@ class LatexWriter:
 
                 # triplets
                 line_output.append('\n\n% triplets')
-                for triplet in triplets:
+                for triplet in line.triplets:
                     dis0, dis1 = 2, 9
                     if (nodes[triplet[0]].value.octave >= 1
                             or nodes[triplet[2]].value.octave >= 1):
