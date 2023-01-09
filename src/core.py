@@ -320,3 +320,37 @@ class Node:
                 return '{} u{}  {}'.format(self.value, underlines, self.text)
         else:
             return ' {}'.format(self.value)
+
+
+class NodeRange:
+    """A range of consecutive nodes."""
+
+    def __init__(self, start, end):
+        """Initialize NodeRange.
+
+        Args:
+            start (int): Starting node index.
+            end (int): Ending node index.
+
+        """
+        self.start = start
+        self.end = end
+
+    def __repr__(self):
+        return f'({self.start}, {self.end})'
+
+
+class Tie(NodeRange):
+    """A tie."""
+
+    def __init__(self, start, end):
+        """Initialize Tie."""
+        super().__init__(start, end)
+
+
+class Slur(NodeRange):
+    """A slur."""
+
+    def __init__(self, start, end):
+        """Initialize Slur."""
+        super().__init__(start, end)

@@ -136,25 +136,25 @@ class LatexWriter:
 
                 # ties
                 line_output.append('\n\n% ties')
-                for idx0, idx1 in ties:
+                for r in ties:
                     dis = 2
-                    if nodes[idx0].value.octave >= 1:
+                    if nodes[r.start].value.octave >= 1:
                         dis = 5
                     line_output.append(r'\draw[tie] ([xshift=+.2pt]a{}.north) '
                                        r'++(0,{}pt) coordinate (tmp) to '
                                        r'([xshift=-.2pt]a{}.north |- tmp);'
-                                       .format(idx0, dis, idx1))
+                                       .format(r.start, dis, r.end))
 
                 # slurs
                 line_output.append('\n\n% slurs')
                 for idx0, idx1 in slurs:
                     dis = 3
-                    if nodes[idx0].value.octave >= 1:
+                    if nodes[r.start].value.octave >= 1:
                         dis = 6
                     line_output.append(r'\draw[slur] (a{}.north) ++(0,{}pt) '
                                        r'coordinate (tmp) to '
                                        r'(a{}.north |- tmp);'
-                                       .format(idx0, dis, idx1))
+                                       .format(r.start, dis, r.end))
 
                 # underlines
                 line_output.append('\n\n% underlines')

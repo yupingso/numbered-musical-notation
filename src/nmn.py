@@ -2,7 +2,7 @@ import re
 from fractions import Fraction
 from collections import namedtuple
 
-from core import Note, Node, NodeType
+from core import Note, Node, NodeType, Tie, Slur
 from writer import LatexWriter
 
 
@@ -307,7 +307,7 @@ class Song:
                                 raise ValueError(
                                         'start note of slur not found')
                             slurs.append(
-                                    (potential_slur_start_line_node_idx,
+                                Slur(potential_slur_start_line_node_idx,
                                      line_node_idx))
                             potential_slur_start_line_node_idx = None
                     else:
@@ -316,7 +316,7 @@ class Song:
                 node = Node(note)
                 bars[-1][-1].append(line_node_idx)
                 if note.tie[0]:
-                    ties.append((line_node_idx_prev, line_node_idx))
+                    ties.append(Tie(line_node_idx_prev, line_node_idx))
                     node.value.tie[0] = True
                     nodes[line_node_idx_prev].value.tie[1] = True
                 else:
