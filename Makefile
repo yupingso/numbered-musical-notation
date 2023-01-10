@@ -13,7 +13,7 @@ all: $(OUTPUT_PPTX)
 .PHONY: latex
 latex:
 	mkdir -p $(LATEX_BUILD)
-	cp -r $(LATEX_DIR) $(LATEX_BUILD)
+	cp -r $(LATEX_DIR)/* $(LATEX_BUILD)
 	src/main.py $(INPUT) $(LATEX_BUILD)
 
 .PHONY: pdf
