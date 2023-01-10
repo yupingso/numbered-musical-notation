@@ -2,7 +2,7 @@ import re
 from fractions import Fraction
 from collections import namedtuple
 
-from core import Note, Node, NodeType, Tie, Slur
+from core import Note, Node, NodeType, Tie, Slur, Triplet
 from writer import LatexWriter
 
 
@@ -414,7 +414,7 @@ class Song:
                         beat += note.duration
                         idx_prev = idx
                 line.append(underlines_list)
-                line.append(triplets)
+                line.append([Triplet(*triplet) for triplet in triplets])
 
     def print(self):
         """Print the song to stdout."""

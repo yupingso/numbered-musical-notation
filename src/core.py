@@ -354,3 +354,18 @@ class Slur(NodeRange):
     def __init__(self, start, end):
         """Initialize Slur."""
         super().__init__(start, end)
+
+
+class Triplet(NodeRange):
+    """A triplet."""
+
+    def __init__(self, start, middle, end):
+        """Initialize Triplet."""
+        super().__init__(start, end)
+        self._nodes = (start, middle, end)
+
+    def __getitem__(self, key):
+        return self._nodes[key]
+
+    def __repr__(self):
+        return repr(list(self._nodes))
