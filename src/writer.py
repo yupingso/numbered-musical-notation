@@ -113,7 +113,7 @@ class LatexWriter:
 
         # slurs
         line_output.append('\n\n% slurs')
-        for idx0, idx1 in line.slurs:
+        for r in line.slurs:
             dis = 3
             if nodes[r.start].value.octave >= 1:
                 dis = 6
