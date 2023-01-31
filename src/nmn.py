@@ -9,6 +9,39 @@ from writer import LatexWriter
 Time = namedtuple('Time', ['upper', 'lower', 'hyphen'])
 
 
+def _get_key_scale(key):
+    """Get the scale (a set of notes) for `key`.
+
+    Args:
+        key (tuple)
+
+    Returns:
+        tuple: A 8-tuple `scale`. For example:
+            - D major: (?, 1,  0,  0,  1,  0,  0,  0)
+            - A flat major: (?, 0, -1, -1,  0,  0, -1, -1)
+            Note that `scale[0]` is not defined.
+
+    """
+    flat = [0, 7, 3, 6, 2, 5, 1, 4]
+    sharp = [0, 4, 1, 5, 2, 6, 3, 7]
+    key2sym = {}
+    for x in [-1, 1]:       # flat or sharp
+        a = [0] * 8
+        for n in range(8):  # number of x
+            pitch = (4 * x * n) % 7 + 1
+            tmp = 0
+            if x == -1 and n >= 2:
+                tmp = -1
+            elif x == 1 and n >= 6:
+                tmp = 1
+            if x == -1:
+                a[flat[n]] = -1
+            else:
+                a[sharp[n]] = 1
+            key2sym[(pitch, tmp)] = tuple(a)
+    return key2sym[key]
+
+
 def parse_pitch(key, s):
     key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
     extended_upper_name_dict = dict(zip('qwertyu', range(1, 8)))
@@ -45,8 +78,9 @@ def parse_pitch(key, s):
             name = key_dict[name.upper()]
         else:
             raise ValueError('{!r} is not allowed in key {}'.format(name, key))
+        scale = _get_key_scale(key)
         if acc is not None:
-            acc -= key[2][name]         # relative to key
+            acc -= scale[name]         # relative to key
         if key[0] <= 4:                 # <= #F major
             if name < key[0]:
                 octave -= 1
@@ -459,24 +493,26 @@ class Song:
 
 
 def parse_key(s):
-    """Convert key string to ([1-7], 0 or 1 or -1, list of sharps or flats).
+    """Convert key string to ([1-7], 0 or 1 or -1).
 
-    s = [#$]?[a-gA-G]|[0-7][#$]?
-    For example,
-    s = '$D': D flat major
-    s = '3#': A major
-    key = (2,  0, (?, 1,  0,  0,  1,  0,  0,  0)): D major
-    key = (6, -1, (?, 0, -1, -1,  0,  0, -1, -1)): A flat major
+    Args:
+        s (str): A key of pattern [#$]?[a-gA-G]|[0-7][#$]?. For example:
+            - `$D`: D flat major
+            - `3#`: A major
+
+    Returns:
+        tuple: A pair `(pitch, sharp or flat)`. For example, `(2, 0)` for D
+            major, and `(6, -1)` for A flat major.
+
     """
     # construct table
     flat = [0, 7, 3, 6, 2, 5, 1, 4]
     sharp = [0, 4, 1, 5, 2, 6, 3, 7]
     sym2key = {}
-    key2sym = {}
     for x in [-1, 1]:       # flat or sharp
         a = [0] * 8
         for n in range(8):  # number of x
-            key = (4 * x * n) % 7 + 1
+            pitch = (4 * x * n) % 7 + 1
             tmp = 0
             if x == -1 and n >= 2:
                 tmp = -1
@@ -486,8 +522,7 @@ def parse_key(s):
                 a[flat[n]] = -1
             else:
                 a[sharp[n]] = 1
-            sym2key[(n, x)] = (key, tmp, tuple(a))
-            key2sym[(key, tmp)] = (n, x, tuple(a))
+            sym2key[(n, x)] = (pitch, tmp)
 
     # parse
     if not s:
@@ -507,11 +542,11 @@ def parse_key(s):
             x = -1
         return sym2key[(int(s[0]), x)]
     else:
-        key = s[-1].upper()
-        key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
-        if key not in key_dict:
+        pitch = s[-1].upper()
+        pitch_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
+        if pitch not in pitch_dict:
             raise ValueError('wrong format for <key> {}'.format(s))
-        key = key_dict[key]
+        pitch = pitch_dict[pitch]
         tmp = 0
         if len(s) == 2:
             if s[0] == '#':
@@ -520,7 +555,7 @@ def parse_key(s):
                 tmp = -1
             else:
                 raise ValueError('wrong format for <key> {}'.format(s))
-        return key, tmp, key2sym[(key, tmp)][2]
+        return pitch, tmp
 
 
 def parse_time(s):
