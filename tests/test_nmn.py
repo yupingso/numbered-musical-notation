@@ -18,6 +18,13 @@ from nmn import Time, Note, parse_pitch, parse_time
     ('G', 'O', None, Note.REST_TO_MATCH_LYRICS, 0),
 ])
 def test_parse_pitch(key, s, expected_acc, expected_name, expected_octave):
+    if key != 'solfa':
+        pitch_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5], strict=True))
+        pitch = pitch_dict[key[0]]
+        tmp = 0
+        if len(key) > 1:
+            tmp = 1 if key[1] == '#' else -1
+        key = pitch, tmp
     acc, name, octave = parse_pitch(key, s)
     assert acc == expected_acc
     assert name == expected_name
