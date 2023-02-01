@@ -44,8 +44,9 @@ def _get_key_scale(key):
 
 def parse_pitch(key, s):
     key_dict = dict(zip('ABCDEFG', [6, 7, 1, 2, 3, 4, 5]))
+    extended_upper_digit_name_dict = {'8': 1, '9': 2}
     extended_upper_name_dict = dict(zip('qwertyu', range(1, 8)))
-    extended_upper_name_dict.update({'8': 1, '9': 2})
+    extended_upper_name_dict.update(extended_upper_digit_name_dict)
     extended_lower_name_dict = dict(zip('zxcvbnm', range(1, 8)))
     acc_dict = {'': None, '#': 1, '$': -1, '%': 0}
     match = re.fullmatch(r"([#$%]?)([0-9a-zA-Z])([',]*)", s)
@@ -76,6 +77,9 @@ def parse_pitch(key, s):
             name = int(name)
         elif name in 'cdefgabCDEFGAB':
             name = key_dict[name.upper()]
+        elif name in extended_upper_digit_name_dict:
+            name = extended_upper_digit_name_dict[name]
+            octave += 1
         else:
             raise ValueError('{!r} is not allowed in key {}'.format(name, key))
         scale = _get_key_scale(key)
@@ -133,7 +137,7 @@ class Song:
         if not s:
             return
 
-        pattern_pitch = r"[#$%]?[0-7a-zA-Z][',]*"
+        pattern_pitch = r"[#$%]?[0-9a-zA-Z][',]*"
         pattern_pitches = r'\[(?:{})+\]'.format(pattern_pitch)
         pattern_duration = r'(?:[_=]+|-*)\.*(?:/3)?'
         pattern = ('(~?)'
