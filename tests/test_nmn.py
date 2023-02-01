@@ -16,6 +16,11 @@ from nmn import Time, Note, parse_pitch, parse_time
     ('C', '0', None, Note.REST, 0),
     ('D', 'o', None, Note.REST_AT_END, 0),
     ('G', 'O', None, Note.REST_TO_MATCH_LYRICS, 0),
+    ('C#', '1', None, 1, 0),
+    ('Db', 'F', None, 3, 0),
+    ('E', '%c', -1, 6, -1),
+    ('A', '#d', 1, 4, 0),
+    ('A', 'b', None, 2, 1),
 ])
 def test_parse_pitch(key, s, expected_acc, expected_name, expected_octave):
     if key != 'solfa':
