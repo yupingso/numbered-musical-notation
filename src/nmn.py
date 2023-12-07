@@ -117,6 +117,7 @@ class Song:
         self.key = None
         self.melody = []
         self.lyrics = []
+        self.slur_starts_at_leading_note = True
 
     def __str__(self):
         lines = [
@@ -338,8 +339,8 @@ class Song:
                 if note.is_rest:
                     # rest cannot in a slur
                     potential_slur_start_line_node_idx = None
-                elif note.to_match_lyrics:
-                    if all_lyrics[lyrics_idx] == '~':
+                else:
+                    if note.to_match_lyrics and all_lyrics[lyrics_idx] == '~':
                         # check if lyrics_idx is the slur end node
                         if (lyrics_idx == num_words - 1
                                 or all_lyrics[lyrics_idx + 1] != '~'):
@@ -350,8 +351,20 @@ class Song:
                                 Slur(potential_slur_start_line_node_idx,
                                      line_node_idx))
                             potential_slur_start_line_node_idx = None
-                    else:
-                        potential_slur_start_line_node_idx = line_node_idx
+                    # update potential_slur_start_line_node_idx
+                    cur_lyrics_idx = (lyrics_idx if note.to_match_lyrics
+                                      else lyrics_idx - 1)
+                    assert cur_lyrics_idx >= 0
+                    if (cur_lyrics_idx < num_words
+                            and all_lyrics[cur_lyrics_idx] != '~'):
+                        if self.slur_starts_at_leading_note:
+                            if note.is_first_in_tie:
+                                potential_slur_start_line_node_idx = \
+                                        line_node_idx
+                        else:
+                            if note.is_last_in_tie:
+                                potential_slur_start_line_node_idx = \
+                                        line_node_idx
                 # append note Node
                 node = Node(note)
                 bars[-1][-1].append(line_node_idx)
@@ -597,6 +610,7 @@ def load_song(melody_file, lyrics_file=None):
 
     key_cfg = '<key>'
     time_cfg = '<time>'
+    slur_cfg = '<slur_starts_at_leading_note>'
 
     # melody
     with open(melody_file) as f:
@@ -617,6 +631,9 @@ def load_song(melody_file, lyrics_file=None):
                     song.append_time_signature(time, s)
                 time = parse_time(line[len(time_cfg):].strip())
                 s = ''
+            elif line.startswith(slur_cfg):
+                value = bool(int(line[len(slur_cfg):].strip()))
+                song.slur_starts_at_leading_note = value
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)

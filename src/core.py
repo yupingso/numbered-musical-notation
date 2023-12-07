@@ -68,10 +68,20 @@ class Note:
         return self._name <= 0
 
     @property
+    def has_lyrics(self):
+        return self._name > 0 or self._name == self.REST_TO_MATCH_LYRICS
+
+    @property
+    def is_first_in_tie(self):
+        return not self.tie[0]
+
+    @property
+    def is_last_in_tie(self):
+        return not self.tie[1]
+
+    @property
     def to_match_lyrics(self):
-        return (not self.tie[0]
-                and (self._name > 0
-                     or self._name == self.REST_TO_MATCH_LYRICS))
+        return self.is_first_in_tie and self.has_lyrics
 
     @property
     def may_start_new_line(self):
