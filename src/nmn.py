@@ -595,6 +595,9 @@ def load_song(melody_file, lyrics_file=None):
     """Load numbered musical notation and lyrics, and return Song."""
     song = Song()
 
+    key_cfg = '<key>'
+    time_cfg = '<time>'
+
     # melody
     with open(melody_file) as f:
         time = None
@@ -605,14 +608,14 @@ def load_song(melody_file, lyrics_file=None):
                 break
             elif not line or line.startswith('//'):     # blank or comment
                 continue
-            elif line.startswith('<key>'):
+            elif line.startswith(key_cfg):
                 if song.key:
                     raise ValueError('only one <key> is allowed')
-                song.key = parse_key(line[5:].strip())
-            elif line.startswith('<time>'):
+                song.key = parse_key(line[len(key_cfg):].strip())
+            elif line.startswith(time_cfg):
                 if time:
                     song.append_time_signature(time, s)
-                time = parse_time(line[6:].strip())
+                time = parse_time(line[len(time_cfg):].strip())
                 s = ''
             else:
                 s += line.replace(' ', '')
