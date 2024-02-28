@@ -426,7 +426,7 @@ class Song:
                 for time, start_beat, idx_list in line.bars:
                     beat = start_beat
                     assert beat >= 0
-                    idx_prev = -9
+                    idx_prev = None
                     for idx in idx_list:
                         node = line.nodes[idx]
                         note = node.value
