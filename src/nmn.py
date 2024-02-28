@@ -404,12 +404,24 @@ class Song:
         return sections
 
     @classmethod
-    def group_underlines(cls, sections):
-        """Group underlines shared by contiguous notes.
+    def for_each_line(cls, sections, func):
+        """Run `func` to modify each line in `sections` in place.
 
-        Also find triplets by modifying sections in place.
+        Args:
+            sections: List of `(tag, lines)`, where `lines` is a list of
+                `OutputLine` objects.
+            func: The function to run, which takes `OutputLine` as input.
+        """
+        for tag, lines in sections:
+            for line in lines:
+                func(line)
 
-        section: (tag, lines)
+    @classmethod
+    def group_underlines(cls, line):
+        """Group underlines in `line` that are shared by contiguous notes.
+
+        Also find triplets by modifying `line.triplet` in place.
+
         line: OutputLine
         bar: (time, start_beat, node indices)
         tie: (node_idx1, node_idx2)
@@ -418,60 +430,58 @@ class Song:
             underline: [node_idx1, node_idx2]
         triplet: [node_idx1, node_idx2, node_idx3]
         """
-        for tag, lines in sections:
-            for line in lines:
-                underlines_list = [None]
-                triplets = []
-                triplet_duration = None
-                for time, start_beat, idx_list in line.bars:
-                    beat = start_beat
-                    assert beat >= 0
-                    idx_prev = None
-                    for idx in idx_list:
-                        node = line.nodes[idx]
-                        note = node.value
-                        if node.type != NodeType.NOTE:
-                            continue
-                        # triplet
-                        if (time.lower == 4 and beat % Fraction(1) == 0) or \
-                           (time.lower == 8 and beat % Fraction(3, 2) == 0):
-                            new_group = True
-                            triplet_duration = None
+        underlines_list = [None]
+        triplets = []
+        triplet_duration = None
+        for time, start_beat, idx_list in line.bars:
+            beat = start_beat
+            assert beat >= 0
+            idx_prev = None
+            for idx in idx_list:
+                node = line.nodes[idx]
+                note = node.value
+                if node.type != NodeType.NOTE:
+                    continue
+                # triplet
+                if (time.lower == 4 and beat % Fraction(1) == 0) or \
+                   (time.lower == 8 and beat % Fraction(3, 2) == 0):
+                    new_group = True
+                    triplet_duration = None
+                else:
+                    new_group = False
+                if note.duration.denominator % 3 == 0:       # triplet
+                    if (new_group or not triplets
+                            or note.duration != triplet_duration):
+                        if triplets and len(triplets[-1]) != 3:
+                            raise ValueError('triplet with less than '
+                                             '3 notes')
+                        triplets.append([idx])
+                    elif len(triplets[-1]) == 3:
+                        triplets.append([idx])
+                    else:
+                        triplets[-1].append(idx)
+                    triplet_duration = note.duration
+                # underline
+                if node.lines < 0:
+                    depth = -node.lines        # number of underlines
+                    for _ in range(depth - len(underlines_list) + 1):
+                        underlines_list.append([])
+                    for k in range(1, depth + 1):
+                        if new_group or not underlines_list[k]:
+                            underlines_list[k].append([idx, idx])
+                        elif underlines_list[k][-1][1] == idx_prev:
+                            underlines_list[k][-1][1] = idx
                         else:
-                            new_group = False
-                        if note.duration.denominator % 3 == 0:       # triplet
-                            if (new_group or not triplets
-                                    or note.duration != triplet_duration):
-                                if triplets and len(triplets[-1]) != 3:
-                                    raise ValueError('triplet with less than '
-                                                     '3 notes')
-                                triplets.append([idx])
-                            elif len(triplets[-1]) == 3:
-                                triplets.append([idx])
-                            else:
-                                triplets[-1].append(idx)
-                            triplet_duration = note.duration
-                        # underline
-                        if node.lines < 0:
-                            depth = -node.lines        # number of underlines
-                            for _ in range(depth - len(underlines_list) + 1):
-                                underlines_list.append([])
-                            for k in range(1, depth + 1):
-                                if new_group or not underlines_list[k]:
-                                    underlines_list[k].append([idx, idx])
-                                elif underlines_list[k][-1][1] == idx_prev:
-                                    underlines_list[k][-1][1] = idx
-                                else:
-                                    underlines_list[k].append([idx, idx])
-                        beat += note.duration
-                        idx_prev = idx
-                line.underlines_list = underlines_list
-                line.triplets = [Triplet(*triplet) for triplet in triplets]
+                            underlines_list[k].append([idx, idx])
+                beat += note.duration
+                idx_prev = idx
+        line.underlines_list = underlines_list
+        line.triplets = [Triplet(*triplet) for triplet in triplets]
 
     def print(self):
         """Print the song to stdout."""
         sections = self.merge_melody_lyrics()
-        self.group_underlines(sections)
+        self.for_each_line(sections, self.group_underlines)
 
         for tag, lines in sections:
             print('{:=^80}'.format(' ' + tag + ' '))
@@ -503,7 +513,7 @@ class Song:
         The tikzpicture package is used to draw the nodes.
         """
         sections = self.merge_melody_lyrics()
-        self.group_underlines(sections)
+        self.for_each_line(sections, self.group_underlines)
 
         writer = LatexWriter(sections)
         writer.save(output_dir)
