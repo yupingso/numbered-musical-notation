@@ -118,6 +118,7 @@ class Song:
         self.melody = []
         self.lyrics = []
         self.slur_starts_at_leading_note = True
+        self.group_8th_notes = False
 
     def __str__(self):
         lines = [
@@ -416,8 +417,43 @@ class Song:
             for line in lines:
                 func(line)
 
-    @classmethod
-    def group_underlines(cls, line):
+    def _get_8th_note_groups(self, nodes, time, start_beat, idx_list):
+        """Get the 8th-note groups, each contains either 3 or 4 8th notes.
+
+        Only 2/4 or 4/4 time signatures are considered. When the input is a
+        full bar (containing either 2 or 4 beats in total), then an 8th-note
+        group must contain 4 8th notes (including rest notes). When the input
+        is not a full bar, a returned group may contain only 3 8th notes.
+
+        As a direct result, at most 2 groups will be returned.
+
+        Returns:
+            List of tuples `(start_idx, end_idx)`.
+        """
+        if time.lower != 4 or time.upper % 2 != 0:
+            return []
+
+        # Split idx_list into parts, each aligned to 2-beat
+        parts = []
+        beat = start_beat
+        for idx in idx_list:
+            node = nodes[idx]
+            if node.type != NodeType.NOTE:
+                continue
+            note = node.value
+            if not parts or beat % Fraction(2) == 0:
+                parts.append([])
+            parts[-1].append((idx, note.duration))
+            beat += note.duration
+
+        groups = []
+        for part in parts:
+            if (all(duration == Fraction(1, 2) for _, duration in part)
+                    and len(part) > 2):
+                groups.append((part[0][0], part[-1][0]))
+        return groups
+
+    def group_underlines(self, line):
         """Group underlines in `line` that are shared by contiguous notes.
 
         Also find triplets by modifying `line.triplet` in place.
@@ -437,18 +473,34 @@ class Song:
             beat = start_beat
             assert beat >= 0
             idx_prev = None
+            special_groups = []
+            group_idx = 0
+            if self.group_8th_notes:
+                special_groups = self._get_8th_note_groups(
+                    line.nodes, time, start_beat, idx_list)
             for idx in idx_list:
                 node = line.nodes[idx]
                 note = node.value
                 if node.type != NodeType.NOTE:
                     continue
-                # triplet
+
+                # special group
+                if (group_idx < len(special_groups)
+                        and idx > special_groups[group_idx][1]):
+                    group_idx += 1
+                special_group = None
+                if group_idx < len(special_groups):
+                    special_group = special_groups[group_idx]
+
                 if (time.lower == 4 and beat % Fraction(1) == 0) or \
                    (time.lower == 8 and beat % Fraction(3, 2) == 0):
                     new_group = True
-                    triplet_duration = None
                 else:
                     new_group = False
+
+                # triplet
+                if new_group:
+                    triplet_duration = None
                 if note.duration.denominator % 3 == 0:       # triplet
                     if (new_group or not triplets
                             or note.duration != triplet_duration):
@@ -461,18 +513,25 @@ class Song:
                     else:
                         triplets[-1].append(idx)
                     triplet_duration = note.duration
+
                 # underline
+                new_underline_group = new_group
+                if (special_group
+                        and special_group[0] < idx <= special_group[1]):
+                    # should not break a special group
+                    new_underline_group = False
                 if node.lines < 0:
                     depth = -node.lines        # number of underlines
                     for _ in range(depth - len(underlines_list) + 1):
                         underlines_list.append([])
                     for k in range(1, depth + 1):
-                        if new_group or not underlines_list[k]:
+                        if new_underline_group or not underlines_list[k]:
                             underlines_list[k].append([idx, idx])
                         elif underlines_list[k][-1][1] == idx_prev:
                             underlines_list[k][-1][1] = idx
                         else:
                             underlines_list[k].append([idx, idx])
+
                 beat += note.duration
                 idx_prev = idx
         line.underlines_list = underlines_list
@@ -621,6 +680,7 @@ def load_song(melody_file, lyrics_file=None):
     key_cfg = '<key>'
     time_cfg = '<time>'
     slur_cfg = '<slur_starts_at_leading_note>'
+    eighth_note_cfg = '<group_8th_notes>'
 
     # melody
     with open(melody_file) as f:
@@ -644,6 +704,9 @@ def load_song(melody_file, lyrics_file=None):
             elif line.startswith(slur_cfg):
                 value = bool(int(line[len(slur_cfg):].strip()))
                 song.slur_starts_at_leading_note = value
+            elif line.startswith(eighth_note_cfg):
+                value = bool(int(line[len(eighth_note_cfg):].strip()))
+                song.group_8th_notes = value
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)
