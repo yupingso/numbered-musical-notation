@@ -20,8 +20,8 @@ sudo apt-get install texlive-lang-chinese
 ```
 
 To install `fdsymbol` package, follow the instructions on
-https://ctan.org/tex-archive/fonts/fdsymbol?lang=en, and copy `latex/texmf` to
-`~/`.
+https://ctan.org/tex-archive/fonts/fdsymbol?lang=en.
+Alternatively, copy `latex/texmf` directly to `~/`.
 
 ## Running examples
 * Run `python3 src/main.py songs/example/ latex/` to generate tex files, which will be saved inside latex directory.
