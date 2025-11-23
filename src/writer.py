@@ -82,8 +82,8 @@ class LatexWriter:
             dis_middle = 9
             if (nodes[c.range.start].value.octave >= 1
                     or nodes[c.range.end].value.octave >= 1):
-                dis += 3
-                dis_middle += 3
+                dis += 2
+                dis_middle += 2
 
             for kk, cc in enumerate(curves):
                 if kk == k or cc.hidden:
