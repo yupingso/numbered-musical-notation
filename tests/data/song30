@@ -1,0 +1,487 @@
+===================================== 主歌1 ======================================
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/4  u2  兩
+    <node 02>  4   1/4  u2  千
+<time> 4/4 beat=0
+    <node 03>  5   1/2  u1  年
+    <node 04>  5   1/2  u1  前
+    <node 05>  5   1/2  u1  的
+    <node 06>  6   1/4  u2  夜
+    <node 07>  5   1/4  u2  晚 ~
+    <node 08>  5   1/2  u1  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 4], [5, 7], [8, 8]]
+    depth 2: [[1, 2], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=5/2
+    <node 00>  4   1/2  u1  耶
+    <node 01>  3   1/2  u1  穌
+    <node 02>  5   1/2  u1  降
+<time> 4/4 beat=0
+    <node 03>  4   1/2  u1  生
+    <node 04>  5   1/2  u1  在
+    <node 05>  4   1/2  u1  伯
+    <node 06>  3   1/4  u2  利
+    <node 07>  1   1/4  u2  恆 ~
+    <node 08>  1   1    u0  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [5, 7]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  1   1/4  u2  美
+    <node 02>  2   1/4  u2  好
+<time> 4/4 beat=0
+    <node 03>  3   1/2  u1  計
+    <node 04> #2   1/4  u2  畫
+    <node 05>  3   1/4  u2  中 ~
+    <node 06>  3   3/4  u1  None
+    <node 07>  .
+<ties> [(5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 5], [6, 6]]
+    depth 2: [[1, 2], [4, 5]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=7/4
+    <node 00>  7   1/4  u2  神 ~
+    <node 01>  7   1/2  u1  None
+    <node 02>  6   1/2  u1  已
+    <node 03>  4   1/2  u1  定
+    <node 04>  3   1/2  u1  下
+<time> 4/4 beat=0
+    <node 05>  3   1    u0  永 ~
+    <node 06>  3   1/4  u2  None
+    <node 07>  4   1/4  u2  恆
+    <node 08>  3   1/2  u1  的
+    <node 09>  2   1    u0  約
+<ties> [(0, 1), (5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [6, 8]]
+    depth 2: [[0, 0], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/4  u2  天
+    <node 02>  4   1/4  u2  父
+<time> 4/4 beat=0
+    <node 03>  5   1/2  u1  多
+    <node 04>  5   1/2  u1  麼
+    <node 05>  5   1/2  u1  愛
+    <node 06>  6   1/4  u2  世
+    <node 07>  5   1/4  u2  人 ~
+    <node 08>  5   1/2  u1  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 4], [5, 7], [8, 8]]
+    depth 2: [[1, 2], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=5/2
+    <node 00>  4   1/2  u1  賜
+    <node 01>  3   1/2  u1  下
+    <node 02>  5   1/2  u1  獨
+<time> 4/4 beat=0
+    <node 03>  4   1/2  u1  生
+    <node 04>  5   1/2  u1  愛
+    <node 05>  4   1/2  u1  子
+    <node 06>  3   1/4  u2  耶
+    <node 07>  1   1/4  u2  穌 ~
+    <node 08>  1   1    u0  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [5, 7]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/2  u1  使
+<time> 4/4 beat=0
+    <node 02>  4   1/2  u1  愛
+    <node 03>  3   1/2  u1  和
+    <node 04>  1   1/2  u1  恩
+    <node 05>  6,  1/2  u1  典
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [2, 3], [4, 5]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=2
+    <node 00>  1   1    u0  被
+    <node 01>  2   1/2  u1  彰
+    <node 02>  1   1/4  u2  None
+    <node 03>  1   1/4  u2  顯 ~
+<time> 4/4 beat=0
+    <node 04>  1   3    u0  None
+    <node 05>  -
+    <node 06>  -
+<ties> [(3, 4)]
+<slurs> [(1, 2)]
+<underlines>
+    depth 1: [[1, 3]]
+    depth 2: [[2, 3]]
+<triplets> []
+===================================== 主歌2 ======================================
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/4  u2  在
+    <node 02>  4   1/4  u2  這
+<time> 4/4 beat=0
+    <node 03>  5   1/2  u1  浩
+    <node 04>  5   1/2  u1  瀚
+    <node 05>  5   1/2  u1  宇
+    <node 06>  6   1/4  u2  宙
+    <node 07>  5   1/4  u2  中 ~
+    <node 08>  5   1/2  u1  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 4], [5, 7], [8, 8]]
+    depth 2: [[1, 2], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=5/2
+    <node 00>  4   1/2  u1  充
+    <node 01>  3   1/2  u1  滿
+    <node 02>  5   1/2  u1  神
+<time> 4/4 beat=0
+    <node 03>  4   1/2  u1  美
+    <node 04>  5   1/2  u1  麗
+    <node 05>  4   1/2  u1  的
+    <node 06>  3   1/4  u2  創
+    <node 07>  1   1/4  u2  造 ~
+    <node 08>  1   1    u0  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [5, 7]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  1   1/4  u2  未
+    <node 02>  2   1/4  u2  出
+<time> 4/4 beat=0
+    <node 03>  3   1/2  u1  生
+    <node 04> #2   1/4  u2  以
+    <node 05>  3   1/4  u2  前 ~
+    <node 06>  3   3/4  u1  None
+    <node 07>  .
+<ties> [(5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 5], [6, 6]]
+    depth 2: [[1, 2], [4, 5]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=7/4
+    <node 00>  7   1/4  u2  神 ~
+    <node 01>  7   1/2  u1  None
+    <node 02>  6   1/2  u1  的
+    <node 03>  4   1/2  u1  愛
+    <node 04>  3   1/2  u1  已
+<time> 4/4 beat=0
+    <node 05>  3   1    u0  環 ~
+    <node 06>  3   1/4  u2  None
+    <node 07>  4   1/4  u2  繞
+    <node 08>  3   1/2  u1  我
+    <node 09>  2   1    u0  們
+<ties> [(0, 1), (5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [6, 8]]
+    depth 2: [[0, 0], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/4  u2  平
+    <node 02>  4   1/4  u2  安
+<time> 4/4 beat=0
+    <node 03>  5   1/2  u1  的
+    <node 04>  5   1/2  u1  聖
+    <node 05>  5   1/2  u1  誕
+    <node 06>  6   1/4  u2  歡
+    <node 07>  5   1/4  u2  慶 ~
+    <node 08>  5   1/2  u1  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 4], [5, 7], [8, 8]]
+    depth 2: [[1, 2], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=5/2
+    <node 00>  4   1/2  u1  耶
+    <node 01>  3   1/2  u1  穌
+    <node 02>  5   1/2  u1  帶
+<time> 4/4 beat=0
+    <node 03>  4   1/2  u1  來
+    <node 04>  5   1/2  u1  永
+    <node 05>  4   1/2  u1  生
+    <node 06>  3   1/4  u2  盼
+    <node 07>  1   1/4  u2  望 ~
+    <node 08>  1   1    u0  None
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 4], [5, 7]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  3   1/2  u1  為
+<time> 4/4 beat=0
+    <node 02>  4   1/2  u1  我
+    <node 03>  3   1/2  u1  們
+    <node 04>  1   1/2  u1  預
+    <node 05>  6,  1/2  u1  備
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [2, 3], [4, 5]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=2
+    <node 00>  1   1    u0  永
+    <node 01>  2   1/2  u1  恆
+    <node 02>  1   1/4  u2  的
+    <node 03>  1   1/4  u2  家 ~
+<time> 4/4 beat=0
+    <node 04>  1   3    u0  None
+    <node 05>  -
+    <node 06>  -
+<ties> [(3, 4)]
+<slurs> []
+<underlines>
+    depth 1: [[1, 3]]
+    depth 2: [[2, 3]]
+<triplets> []
+====================================== 副歌 ======================================
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  1   1/4  u2  小
+    <node 01>  2   1/2  u1  小
+    <node 02>  1   1/4  u2  的
+<time> 4/4 beat=0
+    <node 03>  6   1/2  u1  嬰
+    <node 04>  6   1/2  u1  孩
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 2], [3, 4]]
+    depth 2: [[0, 0], [2, 2]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=1
+    <node 00>  6   1/2  u1  為
+    <node 01>  1'  1/2  u1  愛
+    <node 02>  7   1/2  u1  來
+    <node 03>  1'  1/2  u1  到
+    <node 04>  2'  1/2  u1  世
+    <node 05>  5   1/4  u2  None
+    <node 06>  5   1/4  u2  上 ~
+<time> 4/4 beat=0
+    <node 07>  5   2    u0  None
+    <node 08>  -
+<ties> [(6, 7)]
+<slurs> [(4, 5)]
+<underlines>
+    depth 1: [[0, 1], [2, 3], [4, 6]]
+    depth 2: [[5, 6]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=2
+    <node 00>  6   1/2  u1  讓
+    <node 01>  7   1/2  u1  你
+    <node 02>  1'  1/2  u1  我
+    <node 03>  3   1/2  u1  看
+<time> 4/4 beat=0
+    <node 04>  4   2    u0  見
+    <node 05>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [2, 3]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=2
+    <node 00>  4   1/2  u1  愛
+    <node 01>  3   1/2  u1  的
+    <node 02>  2   1/2  u1  約
+    <node 03>  6   1/2  u1  定
+<time> 4/4 beat=0
+    <node 04>  6   3/2  u0  被
+    <node 05>  .
+    <node 06>  5   1/4  u2  實
+    <node 07>  5   1/4  u2  現 ~
+    <node 08>  5   2    u0  None
+    <node 09>  -
+<ties> [(7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [2, 3], [6, 7]]
+    depth 2: [[6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00>  4   1/4  u2  困
+    <node 01>  3   1/4  u2  惑
+    <node 02>  4   1/4  u2  的
+    <node 03>  3   1/4  u2  人
+    <node 04>  4   1/2  u1  找
+    <node 05>  6   1/4  u2  到
+    <node 06>  5   1/4  u2  路 ~
+    <node 07>  5   2    u0  None
+    <node 08>  -
+<ties> [(6, 7)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 3], [4, 6]]
+    depth 2: [[0, 3], [5, 6]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=0
+    <node 00> #5   1/4  u2  不
+    <node 01> #5   1/4  u2  再
+    <node 02> #5   1/4  u2  迷
+    <node 03> #5   1/4  u2  惑
+    <node 04> #5   1/2  u1  和
+    <node 05>  7   1/4  u2  失
+    <node 06>  7   1/4  u2  望 ~
+    <node 07>  7   1/4  u2  None
+    <node 08>  6   3/4  u1  None ~
+    <node 09>  .
+    <node 10>  6   1/2  u1  None
+<ties> [(6, 7), (8, 10)]
+<slurs> [(6, 8)]
+<underlines>
+    depth 1: [[0, 3], [4, 6], [7, 8], [10, 10]]
+    depth 2: [[0, 3], [5, 6], [7, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=7/2
+    <node 00>  6   1/4  u2  耶
+    <node 01>  7   1/4  u2  穌
+<time> 4/4 beat=0
+    <node 02>  1'  1/2  u1  為
+    <node 03>  1'  1/4  u2  你
+    <node 04>  1'  1/4  u2  我 ~
+    <node 05>  1'  1/2  u1  None
+    <node 06>  1'  1/4  u2  降
+    <node 07>  1'  1/4  u2  生 ~
+    <node 08>  1'  1/2  u1  None
+<ties> [(4, 5), (7, 8)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [2, 4], [5, 7], [8, 8]]
+    depth 2: [[0, 1], [3, 4], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=5/2
+    <node 00>  6   1/2  u1  為
+    <node 01>  7   1/2  u1  愛
+    <node 02>  1'  1/2  u1  走
+<time> 4/4 beat=0
+    <node 03>  6   1/2  u1  向
+    <node 04>  5   1/4  u2  十
+    <node 05>  5   1/4  u2  架 ~
+    <node 06>  5   2    u0  None
+    <node 07>  -
+<ties> [(5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [1, 2], [3, 5]]
+    depth 2: [[4, 5]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  0   1/2  u1  None
+    <node 01>  5,  1/2  u1  是
+<time> 4/4 beat=0
+    <node 02>  5   1    u0  否
+    <node 03>  4   1/2  u1  願
+    <node 04>  3   1/4  u2  打
+    <node 05>  4   1/4  u2  開 ~
+    <node 06>  4   1/4  u2  None
+    <node 07>  3   1/4  u2  心
+    <node 08>  1   1    u0  門
+<ties> [(5, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 1], [3, 5], [6, 7]]
+    depth 2: [[4, 5], [6, 7]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=7/2
+    <node 00>  6,  1/2  u1  接
+<time> 4/4 beat=0
+    <node 01>  5   1    u0  受
+    <node 02>  4   1/2  u1  這
+    <node 03>  3   1/4  u2  份
+    <node 04>  1   1/4  u2  愛 ~
+    <node 05>  1   1    u0  None
+    <node 06>  2   1/2  u1  到
+    <node 07>  1   1/2  u1  永
+<time> 4/4 beat=0
+    <node 08>  1   3    u0  遠
+    <node 09>  -
+    <node 10>  -
+<ties> [(4, 5)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 0], [2, 4], [6, 7]]
+    depth 2: [[3, 4]]
+<triplets> []
+====================================== 尾句 ======================================
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  2   1/2  u1  到
+    <node 01>  1   1/2  u1  永
+<time> 4/4 beat=0
+    <node 02>  1'  4    u0  遠 ~
+    <node 03>  -
+    <node 04>  -
+    <node 05>  -
+<time> 4/4 beat=0
+    <node 06>  1'  2    u0  None
+    <node 07>  -
+    <node 08>  0   1    u0  None
+<ties> [(2, 6)]
+<slurs> []
+<underlines>
+    depth 1: [[0, 1]]
+<triplets> []
+--------------------------------------------------
+<time> 4/4 beat=3
+    <node 00>  2   1/2  u1  到
+    <node 01>  1   1/2  u1  永
+<time> 4/4 beat=0
+    <node 02>  1   4    u0  遠
+    <node 03>  -
+    <node 04>  -
+    <node 05>  -
+<ties> []
+<slurs> []
+<underlines>
+    depth 1: [[0, 1]]
+<triplets> []
