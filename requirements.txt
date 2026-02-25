@@ -2,3 +2,6 @@ flake8>=6
 pytest>=7
 pytest-cov>=4
 python-pptx
+
+# CVE-2023-4863
+pillow>=10.0.1
