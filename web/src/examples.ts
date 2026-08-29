@@ -1,0 +1,5 @@
+export const EXAMPLE_SONG_01 = {
+  title: '你真偉大 (Song 01)',
+  melody: "<key> C\n<time> 4/4\n\n[555]_ | 3. [55566]_ 4 6. [666]_\n5. 3_ [5544]_ 3 - ~ 3_\n\n[555]_ | 3. [55566]_ 4 6. [666]_\n5. 3_ [5544]_ 3 - ~ 3_\n\n[551']_ 3'. [2'1'71'6]_ 5 - ~5_\n[1'1'7]_ 2 - ~ [2465]_ 3 - ~ 3_\n\n[551']_ 3'. [2'1'71'6]_ 5 - ~5_\n[1'71']_ 2'- ~ [2'3'4'7]_ 1' - ~ 1'_\n\n",
+  lyrics: "<tag> \u4e3b\u6b4c\n\u4e3b\u963f\uff01\u6211\u795e\uff0c\n\u6211\u6bcf\u9022\u8209\u76ee\u89c0\u770b\uff0c\n\u4f60\u624b\u6240\u9020\n\u4e00\u5207\u5947\u5999\u5927\u5de5\n\n\u770b\u898b\u661f\u5bbf\uff0c\n\u53c8\u807d\u5230\u9686\u9686\u96f7\u8072\uff0c\n\u4f60\u7684\u5927\u80fd\n\u904d\u6eff\u4e86\u5b87\u5b99\u4e2d\u3002\n\n<tag> \u526f\u6b4c\n\u6211\u9748\u6b4c\u5531\uff0c\n\u8b9a\u7f8e\u6551\u4e3b\u6211\u795e\uff0c\n\u4f60\u771f\u5049\u5927\uff01\n\u4f55\u7b49\u5049\u5927\uff01\n\n\u6211\u9748\u6b4c\u5531\uff0c\n\u8b9a\u7f8e\u6551\u4e3b\u6211\u795e\uff0c\n\u4f60\u771f\u5049\u5927\uff01\n\u4f55\u7b49\u5049\u5927\uff01\n\n",
+};
