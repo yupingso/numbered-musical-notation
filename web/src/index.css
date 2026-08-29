@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'DFKai-SB';
+  src: local('DFKai-SB'), local('BiauKai'), local('標楷體'), local('TW-Kai'), local('STKaiti'), local('KaiTi'), url('/fonts/kaiu.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Accessible Dark-Themed Custom Scrollbars */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: #475569 rgba(15, 23, 42, 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 9999px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #94a3b8;
+}

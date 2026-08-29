@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node -e 'const fs=require(\"fs\"); const p=\"public/fonts\"; const src=\"../latex/fonts/kaiu.ttf\"; if(fs.existsSync(src)){fs.mkdirSync(p,{recursive:true}); fs.copyFileSync(src, p+\"/kaiu.ttf\");}'",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
