@@ -134,9 +134,7 @@ export const App: React.FC = () => {
         {/* Left: Branding & Example Loader */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-md bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-base">
-              🎵
-            </span>
+            <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
             <span className="font-bold text-sm tracking-wide text-white hidden sm:inline">
               詩歌投影片
             </span>
