@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useTransition } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { InputContainer } from './components/InputContainer';
 import { SlideDeckView, SlideDeckStatus } from './components/SlideDeckView';
 import { SyntaxHelpOverlay, HelpType } from './components/SyntaxHelpOverlay';
@@ -6,6 +6,18 @@ import { parseClassicSong } from './core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from './core/svgRenderer';
 import { rasterizeSvgInBrowser } from './core/rasterizerWeb';
 import { appendSlidesToPptx } from './core/pptxExporter';
+import { NodeElement, SheetSlide } from './core/types';
+import {
+  isValidPitchString,
+  performSynchronizedFlowToNext,
+  performSynchronizedFlowToPrev,
+  performSynchronizedLineBreak,
+  performSynchronizedLineMerge,
+  rebarMelodyWithDurationEdit,
+  spliceLyricChar,
+  spliceMelodyNoteDuration,
+  spliceMelodyPitch,
+} from './core/sourceSplicer';
 import { EXAMPLE_SONG_01 } from './examples';
 
 export const App: React.FC = () => {
@@ -17,8 +29,9 @@ export const App: React.FC = () => {
   });
 
   const [slidesSvg, setSlidesSvg] = useState<
-    { slideIndex: number; sectionTag: string | null; svg: string }[]
+    { slideIndex: number; sectionTag: string | null; sectionName?: string; svg: string }[]
   >([]);
+  const [rawSlides, setRawSlides] = useState<SheetSlide[]>([]);
   const [alignmentStatus, setAlignmentStatus] = useState<SlideDeckStatus | null>(null);
 
   const [, startTransition] = useTransition();
@@ -45,14 +58,25 @@ export const App: React.FC = () => {
         const rendered = slides.map((s) => ({
           slideIndex: s.slideIndex,
           sectionTag: s.sectionTag,
+          sectionName: s.sectionName || (s.sectionTag ?? undefined),
           svg: renderer.renderSlide(s),
         }));
 
+        setRawSlides(slides);
         setSlidesSvg(rendered);
-        setAlignmentStatus({
-          valid: true,
-          message: `${rendered.length} 頁簡譜 · ${ast.sections.length} 個段落`,
-        });
+
+        if (ast.errors && ast.errors.length > 0) {
+          setAlignmentStatus({
+            valid: false,
+            message: ast.errors[0],
+            details: ast.errors.join('\n'),
+          });
+        } else {
+          setAlignmentStatus({
+            valid: true,
+            message: `${rendered.length} 頁簡譜 · ${ast.sections.length} 個段落`,
+          });
+        }
       } catch (err: any) {
         setAlignmentStatus({
           valid: false,
@@ -63,6 +87,35 @@ export const App: React.FC = () => {
     });
   }, [melodyText, lyricsText]);
 
+  // Undo / Redo history for right-pane and programmatic edits
+  const undoStackRef = useRef<{ melodyText: string; lyricsText: string }[]>([]);
+  const redoStackRef = useRef<{ melodyText: string; lyricsText: string }[]>([]);
+
+  // Record a snapshot of (melodyText, lyricsText) before applying a right-pane modification
+  const recordHistory = useCallback(() => {
+    undoStackRef.current.push({ melodyText, lyricsText });
+    if (undoStackRef.current.length > 50) {
+      undoStackRef.current.shift();
+    }
+    redoStackRef.current = [];
+  }, [melodyText, lyricsText]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const prev = undoStackRef.current.pop()!;
+    redoStackRef.current.push({ melodyText, lyricsText });
+    setMelodyText(prev.melodyText);
+    setLyricsText(prev.lyricsText);
+  }, [melodyText, lyricsText]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    const next = redoStackRef.current.pop()!;
+    undoStackRef.current.push({ melodyText, lyricsText });
+    setMelodyText(next.melodyText);
+    setLyricsText(next.lyricsText);
+  }, [melodyText, lyricsText]);
+
   // Live render with 150ms debounce
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -71,17 +124,48 @@ export const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [handleRender]);
 
-  // Global Ctrl+Enter shortcut (triggers immediate render)
+  // Global shortcut listeners (Ctrl+Enter to re-render, Ctrl+Z to undo, Ctrl+Y / Ctrl+Shift+Z to redo)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (!isCtrlOrCmd) return;
+
+      if (e.key === 'Enter') {
         e.preventDefault();
         handleRender();
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      const isTextInput =
+        target &&
+        (target.tagName === 'TEXTAREA' ||
+          (target.tagName === 'INPUT' &&
+            (target as HTMLInputElement).type === 'text'));
+
+      // If actively typing inside a textarea/text-input, let the browser handle native text undo/redo
+      if (isTextInput) return;
+
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+
+      if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault();
+        handleRedo();
+        return;
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRender]);
+  }, [handleRender, handleUndo, handleRedo]);
 
   const handleDownloadPptx = async () => {
     if (slidesSvg.length === 0) return;
@@ -123,16 +207,120 @@ export const App: React.FC = () => {
   };
 
   const handleLoadExample = () => {
+    recordHistory();
     setMelodyText(EXAMPLE_SONG_01.melody);
     setLyricsText(EXAMPLE_SONG_01.lyrics);
   };
 
+  const handleBreakLine = useCallback(
+    (targetNode: NodeElement, trailingRestNode?: NodeElement | null) => {
+      recordHistory();
+      const result = performSynchronizedLineBreak(
+        lyricsText,
+        melodyText,
+        targetNode,
+        trailingRestNode
+      );
+      setLyricsText(result.lyricsText);
+      setMelodyText(result.melodyText);
+    },
+    [lyricsText, melodyText, recordHistory]
+  );
+
+  const handleMergeLine = useCallback(
+    (lineEndNode: NodeElement) => {
+      recordHistory();
+      const result = performSynchronizedLineMerge(
+        lyricsText,
+        melodyText,
+        lineEndNode
+      );
+      setLyricsText(result.lyricsText);
+      setMelodyText(result.melodyText);
+    },
+    [lyricsText, melodyText, recordHistory]
+  );
+
+  const handleFlowToNext = useCallback(
+    (prevNode: NodeElement, lineEndNode: NodeElement) => {
+      recordHistory();
+      const result = performSynchronizedFlowToNext(
+        lyricsText,
+        melodyText,
+        prevNode,
+        lineEndNode
+      );
+      setLyricsText(result.lyricsText);
+      setMelodyText(result.melodyText);
+    },
+    [lyricsText, melodyText, recordHistory]
+  );
+
+  const handleFlowToPrev = useCallback(
+    (upToNode: NodeElement, prevLineEndNode: NodeElement) => {
+      recordHistory();
+      const result = performSynchronizedFlowToPrev(
+        lyricsText,
+        melodyText,
+        upToNode,
+        prevLineEndNode
+      );
+      setLyricsText(result.lyricsText);
+      setMelodyText(result.melodyText);
+    },
+    [lyricsText, melodyText, recordHistory]
+  );
+
+  const handleEditLyric = useCallback(
+    (node: NodeElement, newChar: string) => {
+      if (!node.lyricSpan) return;
+      recordHistory();
+      const newLyrics = spliceLyricChar(lyricsText, node.lyricSpan, newChar);
+      setLyricsText(newLyrics);
+    },
+    [lyricsText, recordHistory]
+  );
+
+  const handleEditMelodyPitch = useCallback(
+    (node: NodeElement, newPitch: string) => {
+      if (!node.melodySpan) return;
+      if (!isValidPitchString(newPitch)) return;
+      recordHistory();
+      const newMelody = spliceMelodyPitch(melodyText, node.melodySpan, newPitch);
+      setMelodyText(newMelody);
+    },
+    [melodyText, recordHistory]
+  );
+
+  const handleEditMelodyDuration = useCallback(
+    (node: NodeElement, newDuration: number, newPitch?: string) => {
+      if (!node.melodySpan) return;
+      recordHistory();
+      let newMelody = rebarMelodyWithDurationEdit(
+        melodyText,
+        node.melodySpan,
+        newDuration,
+        newPitch
+      );
+      if (newMelody === melodyText) {
+        newMelody = spliceMelodyNoteDuration(
+          melodyText,
+          node.melodySpan,
+          newDuration,
+          newPitch
+        );
+      }
+      setMelodyText(newMelody);
+    },
+    [melodyText, recordHistory]
+  );
+
   return (
-    <div className="flex flex-col h-screen bg-[#05070e] text-slate-100 overflow-hidden select-text">
-      {/* Global Top Bar (Full Width, h-12, Modern High-Contrast Royal Navy Header) */}
-      <header className="h-12 px-4 flex items-center justify-between bg-[#0f1f38] border-b-2 border-sky-500/80 shadow-md shrink-0 z-20 relative">
+    <div className="flex flex-col h-screen h-[100dvh] bg-[#05070e] text-slate-100 select-text overflow-hidden">
+      {/* Global Top Bar (Full Width, Modern High-Contrast Royal Navy Header) */}
+      <header className="min-h-12 md:h-12 px-4 py-1.5 md:py-0 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 bg-[#0f1f38] border-b-2 border-sky-500/80 shadow-md shrink-0 z-20 relative">
         {/* Left: Branding & Example Loader */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
             <span className="font-bold text-sm tracking-wide text-white hidden sm:inline">
@@ -151,8 +339,8 @@ export const App: React.FC = () => {
           </button>
         </div>
 
-        {/* Center: Live Validation Status Indicator (True Viewport Center) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center">
+        {/* Center: Live Validation Status Indicator in Flex Flow */}
+        <div className="flex items-center justify-center flex-1 min-w-0 order-last w-full md:order-none md:w-auto">
           {alignmentStatus && (
             alignmentStatus.valid ? (
               <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950/90 border border-emerald-500 text-emerald-100 text-xs rounded-full font-bold shadow-sm">
@@ -167,8 +355,8 @@ export const App: React.FC = () => {
                 title={alignmentStatus.details ? `${alignmentStatus.message}\n點擊查看錯誤詳情` : alignmentStatus.message}
               >
                 <span className="text-amber-400 font-bold text-sm">⚠️</span>
-                <span className="truncate max-w-[240px]">{alignmentStatus.message}</span>
-                <span className="text-[10px] bg-amber-800 px-1.5 py-0.2 rounded text-white font-bold border border-amber-400">
+                <span className="truncate">{alignmentStatus.message}</span>
+                <span className="text-xs bg-amber-800 px-1.5 py-0.5 rounded text-white font-bold border border-amber-400 shrink-0">
                   詳情
                 </span>
               </button>
@@ -177,13 +365,19 @@ export const App: React.FC = () => {
         </div>
 
         {/* Right: Export PPTX Button */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={handleDownloadPptx}
             disabled={isExporting || slidesSvg.length === 0 || !(alignmentStatus?.valid ?? true)}
-            className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-xs rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
-            title="下載 OpenXML .pptx 簡報檔案"
+            className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-xs rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
+            title={
+              !(alignmentStatus?.valid ?? true)
+                ? `存在錯誤，無法下載：${alignmentStatus?.message}`
+                : slidesSvg.length === 0
+                ? '無可下載的投影片'
+                : '下載 OpenXML .pptx 簡報檔案'
+            }
           >
             {isExporting ? (
               <>
@@ -200,10 +394,10 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Workspace (Dual Pane Layout below Global Top Bar) */}
-      <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden bg-[#05070e]">
-        {/* Left Pane: Clean Input Area (Maximized height without redundant header) */}
-        <section className="w-[42%] min-w-[380px] max-w-[600px] h-full flex flex-col border-r border-slate-800/90 bg-[#070b14]">
+      {/* Main Workspace (Responsive Dual Pane: side-by-side on md and up, stacked on mobile portrait) */}
+      <main className="flex flex-col md:flex-row flex-1 min-h-0 min-w-0 overflow-y-auto md:overflow-hidden bg-[#05070e]">
+        {/* Left Pane: Clean Input Area */}
+        <section className="w-full md:w-[38%] md:min-w-[280px] md:max-w-[550px] h-[45vh] md:h-full min-h-[320px] md:min-h-0 flex flex-col min-w-0 border-b md:border-b-0 md:border-r border-slate-800/90 bg-[#070b14] shrink-0">
           <InputContainer
             melodyText={melodyText}
             setMelodyText={setMelodyText}
@@ -215,10 +409,19 @@ export const App: React.FC = () => {
         </section>
 
         {/* Right Pane: Slide Deck Preview & Syntax Help Overlay */}
-        <section className="relative flex-1 h-full overflow-hidden flex flex-col min-w-0">
+        <section className="relative flex-1 h-full min-h-[480px] md:min-h-0 overflow-hidden flex flex-col min-w-0 min-h-0">
           <SlideDeckView
             slidesSvg={slidesSvg}
+            rawSlides={rawSlides}
             status={alignmentStatus}
+            melodyText={melodyText}
+            onBreakLine={handleBreakLine}
+            onMergeLine={handleMergeLine}
+            onFlowToNext={handleFlowToNext}
+            onFlowToPrev={handleFlowToPrev}
+            onEditLyric={handleEditLyric}
+            onEditMelodyPitch={handleEditMelodyPitch}
+            onEditMelodyDuration={handleEditMelodyDuration}
           />
 
           {activeHelp && (
@@ -237,12 +440,15 @@ export const App: React.FC = () => {
           onClick={() => setShowErrorModal(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="error-modal-title"
             className="bg-slate-900 border border-amber-500/80 rounded-2xl shadow-2xl max-w-lg w-full p-5 relative flex flex-col space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+              <div id="error-modal-title" className="flex items-center gap-2 text-amber-400 font-bold text-sm">
                 <span className="text-lg">⚠️</span>
                 <span>{alignmentStatus.message}</span>
               </div>

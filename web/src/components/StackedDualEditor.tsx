@@ -37,11 +37,11 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
     <div className="flex flex-col flex-1 gap-3 min-h-0">
       {/* 1. Melody Editor (Elevated with distinct border and shadow) */}
       <div
-        className="flex flex-col flex-1 min-h-[140px] bg-[#0c1222] border border-slate-700/90 rounded-xl overflow-hidden shadow-xl shadow-black/50 focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500/40 transition"
+        className="flex flex-col flex-1 min-h-[8.75rem] bg-[#0c1222] border border-slate-700/90 rounded-xl overflow-hidden shadow-xl shadow-black/50 focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500/40 transition"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleFileDrop(e, setMelodyText)}
       >
-        <div className="flex justify-between items-center px-3.5 py-2 bg-slate-800 border-b border-slate-700/80 text-xs">
+        <div className="h-9 flex justify-between items-center px-3.5 bg-slate-800 border-b border-slate-700/80 text-xs">
           <div className="flex items-center gap-1.5 font-bold text-amber-400">
             <span>🎵</span>
             <span>旋律</span>
@@ -71,11 +71,11 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
 
       {/* 2. Lyrics Editor (Elevated with distinct border and shadow) */}
       <div
-        className="flex flex-col flex-1 min-h-[140px] bg-[#0c1222] border border-slate-700/90 rounded-xl overflow-hidden shadow-xl shadow-black/50 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500/40 transition"
+        className="flex flex-col flex-1 min-h-[8.75rem] bg-[#0c1222] border border-slate-700/90 rounded-xl overflow-hidden shadow-xl shadow-black/50 focus-within:border-sky-500 focus-within:ring-1 focus-within:ring-sky-500/40 transition"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleFileDrop(e, setLyricsText)}
       >
-        <div className="flex justify-between items-center px-3.5 py-2 bg-slate-800 border-b border-slate-700/80 text-xs">
+        <div className="h-9 flex justify-between items-center px-3.5 bg-slate-800 border-b border-slate-700/80 text-xs">
           <div className="flex items-center gap-1.5 font-bold text-sky-400">
             <span>📝</span>
             <span>歌詞</span>
