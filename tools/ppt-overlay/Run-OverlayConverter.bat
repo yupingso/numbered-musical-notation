@@ -5,7 +5,7 @@ echo ===================================================
 echo Starting PowerPoint Slide Overlay Batch Converter
 echo ===================================================
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Overlay-JpgSlides.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Overlay-Slides.ps1"
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo PowerShell exited with an error code.

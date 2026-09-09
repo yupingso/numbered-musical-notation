@@ -11,8 +11,11 @@ $MaxProcessedFiles = 0
 # Maximum processing time in minutes (0 = no limit)
 $MaxProcessingMinutes = 0
 
-# Skip files where *-jpg.ppt already exists ($true = skip, $false = overwrite/re-convert)
+# Skip files where the target (*-jpg.ppt or *-png.ppt, matching $ImageFormat) already exists ($true = skip, $false = overwrite/re-convert)
 $SkipExisting = $true
+
+# Image format for slide exports: "JPG" (standard, smaller file size) or "PNG" (lossless, sharp notation/lines)
+$ImageFormat = "JPG"
 
 # Scale multiplier: 2x gives crisp, high-DPI images on modern screens
 $ScaleMultiplier = 2
@@ -21,12 +24,21 @@ $ScaleMultiplier = 2
 # SCRIPT EXECUTION
 # ==============================================================================
 
+# Normalize and validate image format
+$ImageFormat = ("$ImageFormat").Trim().ToUpper()
+if ($ImageFormat -notin @("JPG", "PNG")) {
+    Write-Host "Error: Unsupported ImageFormat '$ImageFormat'. Please set `$ImageFormat to 'JPG' or 'PNG'." -ForegroundColor Red
+    Read-Host "`nPress Enter to exit"
+    return
+}
+$imgExt = $ImageFormat.ToLower()
+
 # Resolve path safely without wildcard issues and guarantee standard filesystem path
 try {
     $FolderPath = (Resolve-Path -LiteralPath $FolderPath -ErrorAction Stop).ProviderPath
 } catch {
     Write-Host "Error: Invalid path: '$FolderPath'." -ForegroundColor Red
-    Write-Host "Please open Overlay-JpgSlides.ps1 in Notepad and set `$FolderPath to your actual folder or file path." -ForegroundColor Yellow
+    Write-Host "Please open Overlay-Slides.ps1 in Notepad and set `$FolderPath to your actual folder or file path." -ForegroundColor Yellow
     Read-Host "`nPress Enter to exit"
     return
 }
@@ -49,6 +61,7 @@ Write-Log "=====================================================================
 Write-Log "PowerPoint Slide Overlay Batch Converter - Log"
 Write-Log "Started At            : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Log "Target Path           : $FolderPath"
+Write-Log "Image Format          : $ImageFormat"
 Write-Log "Max Processed Files   : $(if ($MaxProcessedFiles -gt 0) { $MaxProcessedFiles } else { 'No limit' })"
 Write-Log "Max Processing Time   : $(if ($MaxProcessingMinutes -gt 0) { "$MaxProcessingMinutes minute(s)" } else { 'No limit' })"
 Write-Log "Skip Existing Targets : $SkipExisting"
@@ -60,6 +73,7 @@ if ($isSingleFile) {
     $pptFiles = @(Get-Item -LiteralPath $FolderPath | Where-Object {
         $_.Extension -ieq ".ppt" -and
         $_.Name -notlike "*-jpg.ppt" -and
+        $_.Name -notlike "*-png.ppt" -and
         $_.Name -notlike "~$*"
     })
 } else {
@@ -67,6 +81,7 @@ if ($isSingleFile) {
     $pptFiles = @(Get-ChildItem -LiteralPath $FolderPath -Filter "*.ppt" -File -Recurse | Where-Object {
         $_.Extension -ieq ".ppt" -and
         $_.Name -notlike "*-jpg.ppt" -and
+        $_.Name -notlike "*-png.ppt" -and
         $_.Name -notlike "~$*"
     })
 }
@@ -118,8 +133,8 @@ try {
         $origPath   = $file.FullName
         $baseName   = $file.BaseName
         $dir        = $file.DirectoryName
-        $targetPath = Join-Path $dir "$baseName-jpg.ppt"
-        $imgFolder  = Join-Path $dir "$baseName-jpgs"
+        $targetPath = Join-Path $dir "$baseName-$imgExt.ppt"
+        $imgFolder  = Join-Path $dir "$baseName-${imgExt}s"
 
         # Check if target already exists and should be skipped
         if ($SkipExisting -and (Test-Path -LiteralPath $targetPath)) {
@@ -128,7 +143,7 @@ try {
             $fileManifest.Add([PSCustomObject]@{
                 Status   = "SKIPPED"
                 FilePath = $origPath
-                Details  = "Target *-jpg.ppt exists"
+                Details  = "Target *-$imgExt.ppt exists"
             })
             Write-Log "[$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))] [SKIPPED] $($file.Name) (Target already exists)"
             continue
@@ -159,14 +174,14 @@ try {
         $fileTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
-            # 1. Create or clean directory for exported JPGs
+            # 1. Create or clean directory for exported images
             if (Test-Path -LiteralPath $imgFolder) {
-                Get-ChildItem -LiteralPath $imgFolder -Filter "slide_*.jpg" -File | Remove-Item -Force -ErrorAction SilentlyContinue
+                Get-ChildItem -LiteralPath $imgFolder -Filter "slide_*.$imgExt" -File | Remove-Item -Force -ErrorAction SilentlyContinue
             } else {
                 [System.IO.Directory]::CreateDirectory($imgFolder) | Out-Null
             }
 
-            # 2. Copy some.ppt to some-jpg.ppt
+            # 2. Copy some.ppt to some-$imgExt.ppt
             Copy-Item -LiteralPath $origPath -Destination $targetPath -Force
 
             # 3. Clear ReadOnly attribute and unblock Mark-of-the-Web to prevent Protected View
@@ -202,7 +217,7 @@ try {
 
             for ($i = 1; $i -le $slideCount; $i++) {
                 $slide   = $slides.Item($i)
-                $imgName = "slide_$i.jpg"
+                $imgName = "slide_$i.$imgExt"
                 $imgPath = Join-Path $imgFolder $imgName
 
                 # Remove existing image file if present to prevent overwrite prompts
@@ -210,8 +225,8 @@ try {
                     Remove-Item -LiteralPath $imgPath -Force -ErrorAction SilentlyContinue
                 }
 
-                # 5. Export slide to JPG
-                $slide.Export($imgPath, "JPG", $exportWidth, $exportHeight)
+                # 5. Export slide to image (JPG or PNG)
+                $slide.Export($imgPath, $ImageFormat, $exportWidth, $exportHeight)
 
                 # Always remove timeline animations so hidden shapes don't swallow clicks in slide shows
                 try {
