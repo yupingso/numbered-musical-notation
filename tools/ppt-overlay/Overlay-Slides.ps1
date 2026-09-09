@@ -26,6 +26,11 @@ $ImageFormat = "JPG"
 # Scale multiplier: 2x gives crisp, high-DPI images on modern screens
 $ScaleMultiplier = 2
 
+# Slide numbers: Hide from exported images, then restore on top of picture overlay
+# $true  = re-enable slide numbers on top of picture overlay if originally present
+# $false = omit slide numbers completely from both exported images and output presentation
+$RestoreSlideNumbers = $true
+
 # Determine script directory with fallback for interactive/ISE environments
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 
@@ -85,6 +90,7 @@ Write-Log "Target Path           : $FolderPath"
 Write-Log "Config File           : $(if (Test-Path -LiteralPath $userConfigFile) { $userConfigFile } else { 'Defaults (no config.ps1)' })"
 Write-Log "Image Format          : $ImageFormat"
 Write-Log "Output PPTX for .ppt  : $OutputPptx"
+Write-Log "Restore Slide Numbers : $RestoreSlideNumbers"
 Write-Log "Max Processed Files   : $(if ($MaxProcessedFiles -gt 0) { $MaxProcessedFiles } else { 'No limit' })"
 Write-Log "Max Processing Time   : $(if ($MaxProcessingMinutes -gt 0) { "$MaxProcessingMinutes minute(s)" } else { 'No limit' })"
 Write-Log "Skip Existing Targets : $SkipExisting"
@@ -263,6 +269,39 @@ try {
                     Remove-Item -LiteralPath $imgPath -Force -ErrorAction SilentlyContinue
                 }
 
+                # Check if slide has slide numbers visible and temporarily hide for clean image export
+                $hasSlideNumber = $false
+                $slideNumberShapes = @()
+                try {
+                    if ($slide.HeadersFooters.SlideNumber.Visible -eq -1) { # -1 = msoTrue
+                        $hasSlideNumber = $true
+                    }
+                } catch {}
+
+                foreach ($shp in $slide.Shapes) {
+                    $isSlideNumShp = $false
+                    try {
+                        if ($shp.Type -eq 14 -and $shp.PlaceholderFormat.Type -eq 16) { # 14 = msoPlaceholder, 16 = ppPlaceholderSlideNumber
+                            if ($shp.Visible -ne 0) {
+                                $slideNumberShapes += $shp
+                                $hasSlideNumber = $true
+                                $isSlideNumShp = $true
+                            }
+                        }
+                    } catch {}
+                    if (-not $isSlideNumShp) {
+                        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shp) | Out-Null
+                    }
+                }
+
+                # Temporarily hide slide numbers before export so exported images are clean
+                if ($hasSlideNumber) {
+                    try { $slide.HeadersFooters.SlideNumber.Visible = 0 } catch {} # 0 = msoFalse
+                    foreach ($shp in $slideNumberShapes) {
+                        try { $shp.Visible = 0 } catch {} # 0 = msoFalse
+                    }
+                }
+
                 # 5. Export slide to image (JPG or PNG)
                 $slide.Export($imgPath, $ImageFormat, $exportWidth, $exportHeight)
 
@@ -289,6 +328,77 @@ try {
                 }
                 $pic.ZOrder(0) # 0 = msoBringToFront
 
+                # Restore slide numbers on top of the picture overlay if originally present and enabled
+                if ($RestoreSlideNumbers -and $hasSlideNumber) {
+                    try { $slide.HeadersFooters.SlideNumber.Visible = -1 } catch {} # -1 = msoTrue
+
+                    $restoredShape = $false
+                    foreach ($shp in $slideNumberShapes) {
+                        try {
+                            $shp.Visible = -1 # -1 = msoTrue
+                            $shp.ZOrder(0)    # 0 = msoBringToFront
+                            $restoredShape = $true
+                        } catch {}
+                    }
+
+                    # If slide number was on the master layout (no shape directly on slide),
+                    # create a slide-level textbox at the master's position so it layers above the picture,
+                    # provided the slide does not suppress master shapes (e.g. title slides with "Hide Background Graphics")
+                    $displayMaster = $true
+                    try {
+                        if ($slide.DisplayMasterShapes -eq 0) { $displayMaster = $false } # 0 = msoFalse
+                    } catch {}
+
+                    if (-not $restoredShape -and $displayMaster) {
+                        try {
+                            $masterPlaceholder = $null
+                            foreach ($mShp in $slide.CustomLayout.Shapes) {
+                                try {
+                                    if ($mShp.Type -eq 14 -and $mShp.PlaceholderFormat.Type -eq 16) {
+                                        $masterPlaceholder = $mShp
+                                        break
+                                    }
+                                } catch {}
+                                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($mShp) | Out-Null
+                            }
+                            if ($null -eq $masterPlaceholder) {
+                                foreach ($mShp in $currentPres.SlideMaster.Shapes) {
+                                    try {
+                                        if ($mShp.Type -eq 14 -and $mShp.PlaceholderFormat.Type -eq 16) {
+                                            $masterPlaceholder = $mShp
+                                            break
+                                        }
+                                    } catch {}
+                                    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($mShp) | Out-Null
+                                }
+                            }
+
+                            if ($null -ne $masterPlaceholder) {
+                                $numBox = $slide.Shapes.AddTextbox(1, $masterPlaceholder.Left, $masterPlaceholder.Top, $masterPlaceholder.Width, $masterPlaceholder.Height) # 1 = msoTextOrientationHorizontal
+                                $numBox.TextFrame.TextRange.InsertSlideNumber() | Out-Null
+                                # Copy layout styling safely
+                                try { $masterPlaceholder.PickUp(); $numBox.Apply() } catch {}
+                                try { $numBox.TextFrame.TextRange.Font.Name = $masterPlaceholder.TextFrame.TextRange.Font.Name } catch {}
+                                try { $numBox.TextFrame.TextRange.Font.Size = $masterPlaceholder.TextFrame.TextRange.Font.Size } catch {}
+                                try { $numBox.TextFrame.TextRange.Font.Color.RGB = $masterPlaceholder.TextFrame.TextRange.Font.Color.RGB } catch {}
+                                try { $numBox.TextFrame.TextRange.ParagraphFormat.Alignment = $masterPlaceholder.TextFrame.TextRange.ParagraphFormat.Alignment } catch {}
+                                try {
+                                    $numBox.TextFrame.MarginLeft   = $masterPlaceholder.TextFrame.MarginLeft
+                                    $numBox.TextFrame.MarginRight  = $masterPlaceholder.TextFrame.MarginRight
+                                    $numBox.TextFrame.MarginTop    = $masterPlaceholder.TextFrame.MarginTop
+                                    $numBox.TextFrame.MarginBottom = $masterPlaceholder.TextFrame.MarginBottom
+                                } catch {}
+                                $numBox.ZOrder(0) # 0 = msoBringToFront
+                                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($numBox) | Out-Null
+                                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($masterPlaceholder) | Out-Null
+                            }
+                        } catch {}
+                    }
+                }
+
+                foreach ($shp in $slideNumberShapes) {
+                    try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($shp) | Out-Null } catch {}
+                }
                 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($pic) | Out-Null
                 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($slide) | Out-Null
             }

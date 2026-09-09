@@ -12,3 +12,4 @@ $SkipExisting         = $true
 $ScaleMultiplier      = 2
 $MaxProcessedFiles    = 0
 $MaxProcessingMinutes = 0
+$RestoreSlideNumbers  = $true
