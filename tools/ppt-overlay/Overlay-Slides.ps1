@@ -1,7 +1,7 @@
 # ==============================================================================
 # CONFIGURATION (Edit these values as needed)
 # ==============================================================================
-# Target directory (or single .ppt file) to process (Windows path style).
+# Target directory (or single .ppt / .pptx file) to process (Windows path style).
 # TIP: You can also set $FolderPath = $PSScriptRoot to automatically scan the folder where this script lives.
 $FolderPath = "C:\Path\To\Your\PPTFolder"
 
@@ -11,8 +11,14 @@ $MaxProcessedFiles = 0
 # Maximum processing time in minutes (0 = no limit)
 $MaxProcessingMinutes = 0
 
-# Skip files where the target (*-jpg.ppt or *-png.ppt, matching $ImageFormat) already exists ($true = skip, $false = overwrite/re-convert)
+# Skip files where the target (*-jpg or *-png, matching current settings) already exists ($true = skip, $false = overwrite/re-convert)
 $SkipExisting = $true
+
+# Output format for legacy .ppt files:
+# $false = keep .ppt format (e.g. *-jpg.ppt or *-png.ppt)
+# $true  = convert and save as modern .pptx (e.g. *-jpg.pptx or *-png.pptx)
+# Note: Input .pptx files always output .pptx regardless of this setting.
+$OutputPptx = $false
 
 # Image format for slide exports: "JPG" (standard, smaller file size) or "PNG" (lossless, sharp notation/lines)
 $ImageFormat = "JPG"
@@ -62,6 +68,7 @@ Write-Log "PowerPoint Slide Overlay Batch Converter - Log"
 Write-Log "Started At            : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Log "Target Path           : $FolderPath"
 Write-Log "Image Format          : $ImageFormat"
+Write-Log "Output PPTX for .ppt  : $OutputPptx"
 Write-Log "Max Processed Files   : $(if ($MaxProcessedFiles -gt 0) { $MaxProcessedFiles } else { 'No limit' })"
 Write-Log "Max Processing Time   : $(if ($MaxProcessingMinutes -gt 0) { "$MaxProcessingMinutes minute(s)" } else { 'No limit' })"
 Write-Log "Skip Existing Targets : $SkipExisting"
@@ -71,24 +78,32 @@ Write-Log "=====================================================================
 if ($isSingleFile) {
     Write-Host "Target file: $FolderPath" -ForegroundColor Cyan
     $pptFiles = @(Get-Item -LiteralPath $FolderPath | Where-Object {
-        $_.Extension -ieq ".ppt" -and
+        ($_.Extension -ieq ".ppt" -or $_.Extension -ieq ".pptx") -and
         $_.Name -notlike "*-jpg.ppt" -and
+        $_.Name -notlike "*-jpg.pptx" -and
         $_.Name -notlike "*-png.ppt" -and
+        $_.Name -notlike "*-png.pptx" -and
+        $_.Name -notlike "*-temp-*.ppt" -and
+        $_.Name -notlike "*-temp-*.pptx" -and
         $_.Name -notlike "~$*"
     })
 } else {
     Write-Host "Scanning directory recursively: $FolderPath" -ForegroundColor Cyan
-    $pptFiles = @(Get-ChildItem -LiteralPath $FolderPath -Filter "*.ppt" -File -Recurse | Where-Object {
-        $_.Extension -ieq ".ppt" -and
+    $pptFiles = @(Get-ChildItem -LiteralPath $FolderPath -File -Recurse | Where-Object {
+        ($_.Extension -ieq ".ppt" -or $_.Extension -ieq ".pptx") -and
         $_.Name -notlike "*-jpg.ppt" -and
+        $_.Name -notlike "*-jpg.pptx" -and
         $_.Name -notlike "*-png.ppt" -and
+        $_.Name -notlike "*-png.pptx" -and
+        $_.Name -notlike "*-temp-*.ppt" -and
+        $_.Name -notlike "*-temp-*.pptx" -and
         $_.Name -notlike "~$*"
     })
 }
 
 if ($pptFiles.Count -eq 0) {
-    Write-Host "No eligible .ppt files found at $FolderPath" -ForegroundColor Yellow
-    Write-Log "No eligible .ppt files found. Exiting."
+    Write-Host "No eligible .ppt or .pptx files found at $FolderPath" -ForegroundColor Yellow
+    Write-Log "No eligible .ppt or .pptx files found. Exiting."
     Read-Host "`nPress Enter to exit"
     return
 }
@@ -133,8 +148,13 @@ try {
         $origPath   = $file.FullName
         $baseName   = $file.BaseName
         $dir        = $file.DirectoryName
-        $targetPath = Join-Path $dir "$baseName-$imgExt.ppt"
+        $origExt    = $file.Extension.ToLower()
+
+        # If input is .pptx, always output .pptx. If input is .ppt, output format depends on $OutputPptx
+        $targetExt  = if ($origExt -eq ".pptx" -or $OutputPptx) { ".pptx" } else { ".ppt" }
+        $targetPath = Join-Path $dir "$baseName-$imgExt$targetExt"
         $imgFolder  = Join-Path $dir "$baseName-${imgExt}s"
+        $isFormatConversion = ($origExt -ne $targetExt)
 
         # Check if target already exists and should be skipped
         if ($SkipExisting -and (Test-Path -LiteralPath $targetPath)) {
@@ -143,7 +163,7 @@ try {
             $fileManifest.Add([PSCustomObject]@{
                 Status   = "SKIPPED"
                 FilePath = $origPath
-                Details  = "Target *-$imgExt.ppt exists"
+                Details  = "Target *-$imgExt$targetExt exists"
             })
             Write-Log "[$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))] [SKIPPED] $($file.Name) (Target already exists)"
             continue
@@ -171,6 +191,7 @@ try {
 
         Write-Host "`nProcessing: $($file.Name)..." -ForegroundColor White
         $currentPres = $null
+        $workingPath = $null
         $fileTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
@@ -181,15 +202,16 @@ try {
                 [System.IO.Directory]::CreateDirectory($imgFolder) | Out-Null
             }
 
-            # 2. Copy some.ppt to some-$imgExt.ppt
-            Copy-Item -LiteralPath $origPath -Destination $targetPath -Force
+            # 2. Prepare working file (temp file if converting .ppt to .pptx, direct target otherwise)
+            $workingPath = if ($isFormatConversion) { Join-Path $dir "$baseName-temp-$PID.ppt" } else { $targetPath }
+            Copy-Item -LiteralPath $origPath -Destination $workingPath -Force
 
             # 3. Clear ReadOnly attribute and unblock Mark-of-the-Web to prevent Protected View
-            Set-ItemProperty -LiteralPath $targetPath -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
-            Unblock-File -LiteralPath $targetPath -ErrorAction SilentlyContinue
+            Set-ItemProperty -LiteralPath $workingPath -Name IsReadOnly -Value $false -ErrorAction SilentlyContinue
+            Unblock-File -LiteralPath $workingPath -ErrorAction SilentlyContinue
 
             # 4. Open presentation with active window (-1) so rendering engine initializes fonts accurately
-            $currentPres = $pptApp.Presentations.Open($targetPath, 0, 0, -1)
+            $currentPres = $pptApp.Presentations.Open($workingPath, 0, 0, -1)
 
             # Ensure application is visible to initialize GDI/DirectX rendering, but placed off-screen so user is uninterrupted
             try {
@@ -258,10 +280,20 @@ try {
             [System.Runtime.InteropServices.Marshal]::ReleaseComObject($slides) | Out-Null
 
             # 7. Save and close
-            $currentPres.Save()
-            $currentPres.Close()
-            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($currentPres) | Out-Null
-            $currentPres = $null
+            if ($isFormatConversion) {
+                # ppSaveAsOpenXMLPresentation = 24 (.pptx)
+                $currentPres.SaveAs($targetPath, 24)
+                $currentPres.Close()
+                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($currentPres) | Out-Null
+                $currentPres = $null
+                Remove-Item -LiteralPath $workingPath -Force -ErrorAction SilentlyContinue
+                $workingPath = $null
+            } else {
+                $currentPres.Save()
+                $currentPres.Close()
+                [System.Runtime.InteropServices.Marshal]::ReleaseComObject($currentPres) | Out-Null
+                $currentPres = $null
+            }
 
             $fileTimer.Stop()
             $durationSec = [math]::Round($fileTimer.Elapsed.TotalSeconds, 1)
@@ -293,9 +325,12 @@ try {
                 $currentPres = $null
             }
 
-            # Atomic cleanup: remove partial target files on failure
+            # Atomic cleanup: remove partial target files and temp working file on failure
             if (Test-Path -LiteralPath $targetPath) {
                 Remove-Item -LiteralPath $targetPath -Force -ErrorAction SilentlyContinue
+            }
+            if ($workingPath -and (Test-Path -LiteralPath $workingPath)) {
+                Remove-Item -LiteralPath $workingPath -Force -ErrorAction SilentlyContinue
             }
             if (Test-Path -LiteralPath $imgFolder) {
                 Remove-Item -LiteralPath $imgFolder -Recurse -Force -ErrorAction SilentlyContinue
