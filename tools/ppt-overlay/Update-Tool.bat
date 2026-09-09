@@ -10,13 +10,12 @@ echo.
 
 set "TOOL_DIR=%~dp0"
 set "BRANCH=main"
-set "REPO_URL=https://raw.githubusercontent.com/yupingso/numbered-musical-notation/%BRANCH%/tools/ppt-overlay"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$ErrorActionPreference = 'Stop'; " ^
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " ^
     "$toolDir = $env:TOOL_DIR.TrimEnd('\'); " ^
-    "$repoUrl = $env:REPO_URL; " ^
+    "$branch = $env:BRANCH; " ^
     "$configPath = Join-Path $toolDir 'config.ps1'; " ^
     "$oldLegacy = Join-Path $toolDir 'Overlay-JpgSlides.ps1'; " ^
     "if (-not (Test-Path -LiteralPath $configPath) -and (Test-Path -LiteralPath $oldLegacy)) { " ^
@@ -56,12 +55,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "    Set-Content -LiteralPath $configPath -Value ($lines -join [System.Environment]::NewLine) -Encoding UTF8; " ^
     "    Write-Host '[MIGRATE] Migrated settings from Overlay-JpgSlides.ps1 to config.ps1.' -ForegroundColor Green; " ^
     "} " ^
-    "Write-Host 'Downloading latest Overlay-Slides.ps1...' -ForegroundColor White; " ^
-    "Invoke-WebRequest -Uri \"$repoUrl/Overlay-Slides.ps1\" -OutFile (Join-Path $toolDir 'Overlay-Slides.ps1') -UseBasicParsing; " ^
-    "Write-Host 'Downloading latest Run-OverlayConverter.bat...' -ForegroundColor White; " ^
-    "Invoke-WebRequest -Uri \"$repoUrl/Run-OverlayConverter.bat\" -OutFile (Join-Path $toolDir 'Run-OverlayConverter.bat') -UseBasicParsing; " ^
-    "Write-Host 'Downloading latest config.ps1.example...' -ForegroundColor White; " ^
-    "Invoke-WebRequest -Uri \"$repoUrl/config.ps1.example\" -OutFile (Join-Path $toolDir 'config.ps1.example') -UseBasicParsing; " ^
+    "$apiUrl = \"https://api.github.com/repos/yupingso/numbered-musical-notation/contents/tools/ppt-overlay?ref=$branch\"; " ^
+    "try { " ^
+    "    Write-Host \"Querying GitHub for files on branch '$branch'...\" -ForegroundColor White; " ^
+    "    $items = Invoke-RestMethod -Uri $apiUrl -Headers @{ 'User-Agent' = 'PowerPoint-Tool-Updater' } -UseBasicParsing; " ^
+    "    foreach ($item in $items) { " ^
+    "        if ($item.type -eq 'file' -and $item.name -notin @('config.ps1', '.gitignore', 'Update-Tool.bat')) { " ^
+    "            Write-Host \"Downloading $($item.name)...\" -ForegroundColor White; " ^
+    "            Invoke-WebRequest -Uri $item.download_url -OutFile (Join-Path $toolDir $item.name) -UseBasicParsing; " ^
+    "        } " ^
+    "    } " ^
+    "} catch { " ^
+    "    Write-Host \"Notice: Could not query directory API ($($_.Exception.Message)).\" -ForegroundColor Yellow; " ^
+    "    Write-Host 'Falling back to direct downloads...' -ForegroundColor Yellow; " ^
+    "    $rawUrl = \"https://raw.githubusercontent.com/yupingso/numbered-musical-notation/$branch/tools/ppt-overlay\"; " ^
+    "    foreach ($fn in @('Overlay-Slides.ps1', 'Run-OverlayConverter.bat', 'config.ps1.example')) { " ^
+    "        Write-Host \"Downloading $fn...\" -ForegroundColor White; " ^
+    "        Invoke-WebRequest -Uri \"$rawUrl/$fn\" -OutFile (Join-Path $toolDir $fn) -UseBasicParsing; " ^
+    "    } " ^
+    "} " ^
     "if (Test-Path -LiteralPath $oldLegacy) { Remove-Item -LiteralPath $oldLegacy -Force -ErrorAction SilentlyContinue }; " ^
     "Write-Host '`nUpdate completed successfully!' -ForegroundColor Green;"
 
