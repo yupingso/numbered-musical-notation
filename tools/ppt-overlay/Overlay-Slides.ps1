@@ -26,6 +26,21 @@ $ImageFormat = "JPG"
 # Scale multiplier: 2x gives crisp, high-DPI images on modern screens
 $ScaleMultiplier = 2
 
+# Determine script directory with fallback for interactive/ISE environments
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
+
+# Load external user configuration if present (overrides defaults and survives tool updates)
+$userConfigFile = Join-Path $scriptDir "config.ps1"
+if (Test-Path -LiteralPath $userConfigFile) {
+    try {
+        . $userConfigFile
+    } catch {
+        Write-Host "Error: Failed to load '$userConfigFile': $($_.Exception.Message)" -ForegroundColor Red
+        Read-Host "`nPress Enter to exit"
+        return
+    }
+}
+
 # ==============================================================================
 # SCRIPT EXECUTION
 # ==============================================================================
@@ -44,7 +59,7 @@ try {
     $FolderPath = (Resolve-Path -LiteralPath $FolderPath -ErrorAction Stop).ProviderPath
 } catch {
     Write-Host "Error: Invalid path: '$FolderPath'." -ForegroundColor Red
-    Write-Host "Please open Overlay-Slides.ps1 in Notepad and set `$FolderPath to your actual folder or file path." -ForegroundColor Yellow
+    Write-Host "Please copy config.ps1.example to config.ps1 (or edit Overlay-Slides.ps1) and set `$FolderPath to your actual folder or file path." -ForegroundColor Yellow
     Read-Host "`nPress Enter to exit"
     return
 }
@@ -67,6 +82,7 @@ Write-Log "=====================================================================
 Write-Log "PowerPoint Slide Overlay Batch Converter - Log"
 Write-Log "Started At            : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Log "Target Path           : $FolderPath"
+Write-Log "Config File           : $(if (Test-Path -LiteralPath $userConfigFile) { $userConfigFile } else { 'Defaults (no config.ps1)' })"
 Write-Log "Image Format          : $ImageFormat"
 Write-Log "Output PPTX for .ppt  : $OutputPptx"
 Write-Log "Max Processed Files   : $(if ($MaxProcessedFiles -gt 0) { $MaxProcessedFiles } else { 'No limit' })"

@@ -1,0 +1,14 @@
+# ==============================================================================
+# PowerPoint Slide Overlay - User Configuration (Example)
+# Copy this file to 'config.ps1' in this directory to customize your settings.
+# 'config.ps1' is ignored by git and will not be overwritten by tool updates.
+# For descriptions of each setting and new options, see CONFIGURATION in Overlay-Slides.ps1.
+# ==============================================================================
+
+$FolderPath           = "C:\Path\To\Your\PPTFolder"
+$ImageFormat          = "JPG"
+$OutputPptx           = $false
+$SkipExisting         = $true
+$ScaleMultiplier      = 2
+$MaxProcessedFiles    = 0
+$MaxProcessingMinutes = 0
