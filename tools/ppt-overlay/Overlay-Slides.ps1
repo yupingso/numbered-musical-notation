@@ -31,6 +31,11 @@ $ScaleMultiplier = 2
 # $false = omit slide numbers completely from both exported images and output presentation
 $RestoreSlideNumbers = $true
 
+# Convert first slide (title slide) to image overlay:
+# $true  = convert slide 1 to image overlay (standard behavior)
+# $false = skip slide 1, leaving it completely untouched in native form
+$ConvertFirstSlide = $true
+
 # Determine script directory with fallback for interactive/ISE environments
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
 
@@ -91,6 +96,7 @@ Write-Log "Config File           : $(if (Test-Path -LiteralPath $userConfigFile)
 Write-Log "Image Format          : $ImageFormat"
 Write-Log "Output PPTX for .ppt  : $OutputPptx"
 Write-Log "Restore Slide Numbers : $RestoreSlideNumbers"
+Write-Log "Convert First Slide   : $ConvertFirstSlide"
 Write-Log "Max Processed Files   : $(if ($MaxProcessedFiles -gt 0) { $MaxProcessedFiles } else { 'No limit' })"
 Write-Log "Max Processing Time   : $(if ($MaxProcessingMinutes -gt 0) { "$MaxProcessingMinutes minute(s)" } else { 'No limit' })"
 Write-Log "Skip Existing Targets : $SkipExisting"
@@ -260,6 +266,11 @@ try {
             Write-Host "  Slides count: $slideCount" -ForegroundColor Gray
 
             for ($i = 1; $i -le $slideCount; $i++) {
+                if ($i -eq 1 -and -not $ConvertFirstSlide) {
+                    Write-Host "  Slide 1: Skipped (ConvertFirstSlide = `$false)" -ForegroundColor Gray
+                    continue
+                }
+
                 $slide   = $slides.Item($i)
                 $imgName = "slide_$i.$imgExt"
                 $imgPath = Join-Path $imgFolder $imgName

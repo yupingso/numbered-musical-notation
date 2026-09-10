@@ -40,6 +40,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "    if ($txt -match '\$OutputPptx\s*=\s*\$(true|false)' -and $matches[1].ToLower() -eq 'true') { $outPptx = '$true' }; " ^
     "    $restoreNums = '$true'; " ^
     "    if ($txt -match '\$RestoreSlideNumbers\s*=\s*\$(true|false)' -and $matches[1].ToLower() -eq 'false') { $restoreNums = '$false' }; " ^
+    "    $convertFirst = '$true'; " ^
+    "    if ($txt -match '\$ConvertFirstSlide\s*=\s*\$(true|false)' -and $matches[1].ToLower() -eq 'false') { $convertFirst = '$false' }; " ^
     "    $lines = @( " ^
     "        '# ==============================================================================', " ^
     "        '# PowerPoint Slide Overlay - User Configuration', " ^
@@ -53,7 +55,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "        \"`$ScaleMultiplier      = $scale\", " ^
     "        \"`$MaxProcessedFiles    = $maxFiles\", " ^
     "        \"`$MaxProcessingMinutes = $maxMins\", " ^
-    "        \"`$RestoreSlideNumbers  = $restoreNums\" " ^
+    "        \"`$RestoreSlideNumbers  = $restoreNums\", " ^
+    "        \"`$ConvertFirstSlide    = $convertFirst\" " ^
     "    ); " ^
     "    Set-Content -LiteralPath $configPath -Value ($lines -join [System.Environment]::NewLine) -Encoding UTF8; " ^
     "    Write-Host '[MIGRATE] Migrated settings from Overlay-JpgSlides.ps1 to config.ps1.' -ForegroundColor Green; " ^
