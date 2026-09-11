@@ -823,11 +823,11 @@ export function rebarMelodyWithDurationEdit(
 
   const rawFinalPitch = newPitch || parsedNotes[targetIdx].pitch;
   const finalPitch = normalizePitchString(rawFinalPitch.trim());
-  if (
-    Math.abs(oldDuration - newDuration) < 1e-6 &&
-    finalPitch === parsedNotes[targetIdx].pitch
-  ) {
-    return melodyText;
+  if (Math.abs(oldDuration - newDuration) < 1e-6) {
+    if (finalPitch === parsedNotes[targetIdx].pitch) {
+      return melodyText;
+    }
+    return spliceMelodyPitch(melodyText, targetSpan, finalPitch);
   }
 
   // Find group start if targetIdx is inside a multi-note token (e.g. bracketed group)

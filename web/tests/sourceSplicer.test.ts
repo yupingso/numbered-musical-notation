@@ -730,6 +730,35 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     expect(nodes[3].text).toBe('好');
     expect(nodes[0].lyricSpan).toEqual({ start: 9, end: 11 });
   });
+
+  it('editing pitch without changing duration preserves melody text exactly byte-for-byte outside target note', async () => {
+    const { spliceMelodyPitch, rebarMelodyWithDurationEdit } = await import('../src/core/sourceSplicer');
+    const { EXAMPLE_SONG_01 } = await import('../src/examples');
+
+    const ast = parseClassicSong(EXAMPLE_SONG_01.melody, EXAMPLE_SONG_01.lyrics);
+    const line0 = ast.sections[0].lines[0];
+    const node1 = line0.nodes.find((n) => n.text === '主')!;
+    expect(node1).toBeDefined();
+    expect(node1.melodySpan).toBeDefined();
+
+    // Splice pitch from 5 to 3
+    const spliced = spliceMelodyPitch(EXAMPLE_SONG_01.melody, node1.melodySpan!, '3');
+    // First note in [555]_ should become [355]_
+    expect(spliced).toContain('[355]_');
+    // The rest of the string after [355]_ must be 100% byte-for-byte identical to the original
+    expect(spliced.slice(spliced.indexOf('[355]_') + 6)).toBe(
+      EXAMPLE_SONG_01.melody.slice(EXAMPLE_SONG_01.melody.indexOf('[555]_') + 6)
+    );
+
+    // Also verify rebarMelodyWithDurationEdit delegates cleanly without downstream rebarring when duration does not change
+    const rebarSpliced = rebarMelodyWithDurationEdit(
+      EXAMPLE_SONG_01.melody,
+      node1.melodySpan!,
+      (node1.value as Note).duration.toNumber(),
+      '3'
+    );
+    expect(rebarSpliced).toBe(spliced);
+  });
 });
 
 

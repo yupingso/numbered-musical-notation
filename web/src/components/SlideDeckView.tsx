@@ -80,12 +80,6 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
       onEditMelodyDuration(targetNode, dVal, isPitchChanged ? pVal : undefined);
     } else if (
       isPitchChanged &&
-      onEditMelodyDuration &&
-      selectedUnit.initialDuration > 0
-    ) {
-      onEditMelodyDuration(targetNode, selectedUnit.initialDuration, pVal);
-    } else if (
-      isPitchChanged &&
       onEditMelodyPitch &&
       targetNode.value instanceof Note
     ) {

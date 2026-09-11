@@ -6,7 +6,7 @@ import { parseClassicSong } from './core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from './core/svgRenderer';
 import { rasterizeSvgInBrowser } from './core/rasterizerWeb';
 import { appendSlidesToPptx } from './core/pptxExporter';
-import { NodeElement, SheetSlide } from './core/types';
+import { NodeElement, Note, SheetSlide } from './core/types';
 import {
   isValidPitchString,
   performSynchronizedFlowToNext,
@@ -296,6 +296,17 @@ export const App: React.FC = () => {
     (node: NodeElement, newDuration: number, newPitch?: string) => {
       if (!node.melodySpan) return;
       recordHistory();
+      const curDuration =
+        node.value instanceof Note ? node.value.duration.toNumber() : undefined;
+      const durationActuallyChanged =
+        curDuration === undefined || Math.abs(newDuration - curDuration) > 1e-6;
+
+      if (!durationActuallyChanged && newPitch) {
+        const newMelody = spliceMelodyPitch(melodyText, node.melodySpan, newPitch);
+        setMelodyText(newMelody);
+        return;
+      }
+
       let newMelody = rebarMelodyWithDurationEdit(
         melodyText,
         node.melodySpan,
