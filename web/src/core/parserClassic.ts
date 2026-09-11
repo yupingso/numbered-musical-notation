@@ -8,16 +8,18 @@ import {
   OutputLine,
   Section,
   SongAST,
-  TimeSignature,
+  SourceSpan,
 } from './types';
 
 export type KeySignature = 'solfa' | [number, number]; // [pitch (1-7), accidental (-1, 0, 1)]
 
-export interface ParsedTime extends TimeSignature {
-  upper: number;
-  lower: number;
-  hyphen?: number;
-}
+import {
+  initPossibleEnds,
+  splitNote,
+  type ParsedTime,
+} from './rhythmSplitter';
+export type { ParsedTime };
+export { initPossibleEnds, splitNote };
 
 export function getKeyScale(key: [number, number]): number[] {
   const flat = [0, 7, 3, 6, 2, 5, 1, 4];
@@ -240,209 +242,17 @@ export function parsePitch(
   return [acc, name, octave];
 }
 
-const possibleEndsCache: Map<string, number[][]> = new Map();
-
-export function initPossibleEnds(n: number, m: number): number[][] {
-  const cacheKey = `${n},${m}`;
-  if (possibleEndsCache.has(cacheKey)) {
-    return possibleEndsCache.get(cacheKey)!;
-  }
-  const num = m << n;
-  const ends: Set<number>[] = Array.from({ length: num }, () => new Set());
-
-  // k < n
-  for (let k = 0; k < n; k++) {
-    for (let a = 0; a < num; a += 1 << k) {
-      let start = a;
-      let end = a + (1 << k);
-      if (end > num) break;
-      ends[start].add(end);
-      if ((a >> k) % 2 === 0 && k > 0 && end + (1 << (k - 1)) < num) {
-        ends[start + (1 << (k - 1))].add(end + (1 << (k - 1)));
-      }
-      if ((a >> k) % 2 === 1) {
-        for (let j = k - 1; j >= 0; j--) {
-          start -= 1 << j;
-          if (start < 0) break;
-          ends[start].add(end);
-        }
-      } else {
-        for (let j = k - 1; j >= 0; j--) {
-          end += 1 << j;
-          if (end > num) break;
-          ends[start].add(end);
-        }
-      }
-    }
-  }
-
-  // k >= n
-  const mBitLength = Math.floor(Math.log2(m)) + 1;
-  for (let k = n; k < n + mBitLength; k++) {
-    for (let a = 0; a < num; a += 1 << n) {
-      let start = a;
-      let end = a + (1 << k);
-      if (end > num) break;
-      ends[start].add(end);
-      if (k > 0 && end + (1 << (k - 1)) < num) {
-        ends[start + (1 << (k - 1))].add(end + (1 << (k - 1)));
-      }
-      for (let j = k - 1; j >= 0; j--) {
-        start -= 1 << j;
-        if (start < 0) break;
-        ends[start].add(end);
-      }
-      start = a;
-      for (let j = k - 1; j >= 0; j--) {
-        end += 1 << j;
-        if (end > num) break;
-        ends[start].add(end);
-      }
-    }
-  }
-
-  const sortedEnds = ends.map((s) => Array.from(s).sort((x, y) => x - y));
-  possibleEndsCache.set(cacheKey, sortedEnds);
-  return sortedEnds;
-}
-
-export function splitNote(time: ParsedTime, startBeat: Fraction, note: Note): Note[] {
-  if (!time.hyphen) {
-    throw new Error(`no need to split note for time`);
-  }
-  if (!time.upper) {
-    throw new Error(`cannot split note for time ?/${time.lower}`);
-  }
-  note.lines = null;
-  note.dots = null;
-  const duration = note.duration;
-  const p = Math.floor(Math.log2(time.hyphen)) + 1 - 3;
-
-  let unit: number;
-  let n: number;
-  let m: number;
-  let nUnit: number;
-  let mUnit: number;
-
-  if (time.lower === 4) {
-    unit = 1 << p;
-    if (time.upper === 2) {
-      n = p + 1;
-      m = 1;
-    } else if (time.upper === 3) {
-      n = p;
-      m = 3;
-    } else if (time.upper === 4) {
-      n = p + 2;
-      m = 1;
-    } else {
-      throw new Error(`unknown time.upper ${time.upper}`);
-    }
-    nUnit = 0;
-    mUnit = time.upper;
-  } else {
-    unit = Math.floor((3 / 2) * (1 << p));
-    n = p - 1;
-    m = 3;
-    if (time.upper === 6) {
-      nUnit = 0;
-      mUnit = 2;
-    } else if (time.upper === 9) {
-      nUnit = 0;
-      mUnit = 3;
-    } else if (time.upper === 12) {
-      nUnit = 2;
-      mUnit = 1;
-    } else {
-      throw new Error(`unknown time.upper ${time.upper}`);
-    }
-  }
-
-  const ends = initPossibleEnds(n, m);
-  const endsUnit = initPossibleEnds(nUnit, mUnit);
-  const end = Math.round(startBeat.add(duration).toNumber() * (1 << p));
-  const subnotes: Note[] = [];
-  let beat = startBeat;
-
-  while (beat.lessThan(startBeat.add(duration))) {
-    const start = Math.round(beat.toNumber() * (1 << p));
-    let subend: number | null = null;
-
-    if (start % unit === 0) {
-      const uIdx = Math.floor(start / unit);
-      if (uIdx < endsUnit.length) {
-        for (const eRel of endsUnit[uIdx]) {
-          const e = eRel * unit;
-          if (e > end) break;
-          if (time.lower === 8 && e !== start + unit) continue;
-          subend = e;
-        }
-      }
-    }
-
-    const base = start - (start % (1 << n));
-    const rem = start % (1 << n);
-    if (rem < ends.length) {
-      for (const eRel of ends[rem]) {
-        const e = base + eRel;
-        if (e > end) break;
-        const length = e - start;
-        if (
-          (time.lower === 4 && length >= unit * 2) ||
-          (time.lower === 8 && length > unit)
-        ) {
-          break;
-        }
-        if (subend === null || e > subend) {
-          subend = e;
-        }
-      }
-    }
-
-    if (subend === null) {
-      throw new Error(`cannot find ending point in (${start}, ${end}]`);
-    }
-
-    const endBeat = new Fraction(subend, 1 << p);
-    const subnote = note.copy();
-    subnote.duration = endBeat.sub(beat);
-
-    if (subnotes.length === 0) {
-      if (!endBeat.equals(startBeat.add(duration))) {
-        subnote.tie[1] = true;
-      }
-    } else {
-      subnote.tie[0] = true;
-      if (note._name === Note.REST_TO_MATCH_LYRICS) {
-        subnote._name = Note.REST;
-      }
-    }
-    subnotes.push(subnote);
-    beat = endBeat;
-  }
-
-  for (let i = 0; i < subnotes.length; i++) {
-    const subnote = subnotes[i];
-    if (note.isRest) {
-      subnote.tie[0] = false;
-      subnote.tie[1] = false;
-    } else {
-      if (i > 0) subnote.tie[0] = true;
-      if (i < subnotes.length - 1) subnote.tie[1] = true;
-    }
-  }
-
-  return subnotes;
-}
 
 export class ClassicSongParser {
   key: KeySignature = [1, 0]; // Default C major
   melody: Array<[ParsedTime, Fraction, Note[]]> = [];
   lyrics: Array<[string, string[]]> = [];
+  lyricsSpans: Array<[string, SourceSpan[][]]> = [];
   slurStartsAtLeadingNote = true;
   group8thNotes = false;
+  errors: string[] = [];
 
-  appendTimeSignature(time: ParsedTime, s: string) {
+  appendTimeSignature(time: ParsedTime, s: string, offsetMap?: number[]) {
     if (!time) throw new Error('Unknown <time>');
     if (!s) return;
 
@@ -452,8 +262,11 @@ export class ClassicSongParser {
     const regex = new RegExp(`(~?)(${patternPitch}|${patternPitches})(${patternDuration})(~?)`, 'g');
 
     const bars = s.split('|');
+    let currentPosInS = 0;
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
+      const barStartInS = currentPosInS;
+      currentPosInS += bar.length + 1;
       if (!bar) continue;
 
       let barDuration = new Fraction(0);
@@ -510,9 +323,14 @@ export class ClassicSongParser {
             .mul(triplet);
         }
 
+        const matchIdxInBar = match.index;
+        const tie0Len = match[1].length;
+        const pitchesRaw = match[2];
+        const isBracketed = pitchesRaw.startsWith('[') && pitchesRaw.endsWith(']');
         pitchesStr = pitchesStr.replace(/^\[|\]$/g, '');
         const pitchMatches = pitchesStr.match(new RegExp(patternPitch, 'g')) || [];
 
+        let currentPitchOffsetInRaw = isBracketed ? 1 : 0;
         for (let k = 0; k < pitchMatches.length; k++) {
           const pitch = pitchMatches[k];
           const [acc, name, octave] = parsePitch(this.key, pitch);
@@ -530,6 +348,23 @@ export class ClassicSongParser {
             dotsFinal ?? 0,
             tie
           );
+
+          if (offsetMap) {
+            const pitchPosInRaw = pitchesRaw.indexOf(pitch, currentPitchOffsetInRaw);
+            const pitchStartInBar = matchIdxInBar + tie0Len + (pitchPosInRaw >= 0 ? pitchPosInRaw : 0);
+            const pitchStartInS = barStartInS + pitchStartInBar;
+            const pitchEndInS = pitchStartInS + pitch.length - 1;
+            if (pitchStartInS >= 0 && pitchEndInS < offsetMap.length) {
+              note.span = {
+                start: offsetMap[pitchStartInS],
+                end: offsetMap[pitchEndInS] + 1,
+              };
+            }
+            if (pitchPosInRaw >= 0) {
+              currentPitchOffsetInRaw = pitchPosInRaw + pitch.length;
+            }
+          }
+
           noteList.push(note);
           barDuration = barDuration.add(duration);
         }
@@ -645,17 +480,19 @@ export class ClassicSongParser {
       splitSections[sumLen] = tag;
       for (const s of lyricsList) {
         if (s.startsWith('~')) {
-          throw new Error(`A line of lyrics cannot start with '~' (${s})`);
+          this.errors.push(`A line of lyrics cannot start with '~' (${s})`);
         }
         splitLines.add(sumLen);
-        sumLen += s.length;
+        sumLen += Array.from(s).length;
       }
     }
 
-    const allLyrics = this.lyrics.flatMap(([, lines]) => lines).join('');
+    const allLyrics = Array.from(this.lyrics.flatMap(([, lines]) => lines).join(''));
+    const allLyricSpans = this.lyricsSpans.flatMap(([, lines]) => lines.flatMap((s) => s));
     const numWords = allLyrics.length;
 
     let lyricsIdx = 0;
+    let totalNotesToMatchLyrics = 0;
     let sectionAdded = false;
     let lineAdded = false;
     let lineNodeIdxPrev = -1;
@@ -675,6 +512,10 @@ export class ClassicSongParser {
             sectionAdded = true;
           }
         }
+        if (sections.length === 0) {
+          sections.push({ tag: tag || (this.lyrics[0]?.[0] || ' '), lines: [] });
+          sectionAdded = true;
+        }
 
         // New line
         if (splitLines.has(lyricsIdx) && !lineAdded) {
@@ -684,6 +525,10 @@ export class ClassicSongParser {
             lineNodeIdxPrev = -1;
             potentialSlurStartLineNodeIdx = null;
           }
+        }
+        if (sections[sections.length - 1].lines.length === 0) {
+          sections[sections.length - 1].lines.push(new OutputLine());
+          lineAdded = true;
         }
 
         const curSection = sections[sections.length - 1];
@@ -703,15 +548,16 @@ export class ClassicSongParser {
         if (note.isRest) {
           potentialSlurStartLineNodeIdx = null;
         } else {
-          if (note.toMatchLyrics && allLyrics[lyricsIdx] === '~') {
+          if (note.toMatchLyrics && lyricsIdx < numWords && allLyrics[lyricsIdx] === '~') {
             if (lyricsIdx === numWords - 1 || allLyrics[lyricsIdx + 1] !== '~') {
               if (potentialSlurStartLineNodeIdx === null) {
-                throw new Error('Start note of slur not found');
+                this.errors.push('Start note of slur not found');
+              } else {
+                slurs.push({
+                  start: potentialSlurStartLineNodeIdx,
+                  end: lineNodeIdx,
+                });
               }
-              slurs.push({
-                start: potentialSlurStartLineNodeIdx,
-                end: lineNodeIdx,
-              });
               potentialSlurStartLineNodeIdx = null;
             }
           }
@@ -727,26 +573,35 @@ export class ClassicSongParser {
         }
 
         const node = new NodeElement(note);
+        if (note.span) {
+          node.melodySpan = { ...note.span };
+        }
         if (note.tie[0]) {
           ties.push({ start: lineNodeIdxPrev, end: lineNodeIdx });
           (node.value as Note).tie[0] = true;
           (nodes[lineNodeIdxPrev].value as Note).tie[1] = true;
         } else {
           if (note.toMatchLyrics) {
-            if (lyricsIdx >= numWords) {
-              throw new Error(`#notes > ${numWords} words`);
-            }
-            const lyricChar = allLyrics[lyricsIdx];
-            if (note.isRest) {
-              if (lyricChar !== 'O') {
-                throw new Error(`Note O cannot match lyrics "${lyricChar}"`);
+            totalNotesToMatchLyrics++;
+            if (lyricsIdx < numWords) {
+              const lyricChar = allLyrics[lyricsIdx];
+              const lyricSpan = allLyricSpans[lyricsIdx];
+              if (note.isRest) {
+                if (lyricChar !== 'O') {
+                  this.errors.push(`Note O cannot match lyrics "${lyricChar}"`);
+                }
+              } else if (lyricChar !== '~') {
+                node.text = lyricChar;
+                if (lyricSpan) {
+                  node.lyricSpan = { ...lyricSpan };
+                }
               }
-            } else if (lyricChar !== '~') {
-              node.text = lyricChar;
+              lyricsIdx++;
+              sectionAdded = false;
+              lineAdded = false;
+            } else {
+              // More notes than lyrics: align left, last notes do not have lyrics below them
             }
-            lyricsIdx++;
-            sectionAdded = false;
-            lineAdded = false;
           }
         }
 
@@ -755,19 +610,23 @@ export class ClassicSongParser {
 
         // Append dash nodes
         for (let d = 0; d < (node.lines ?? 0); d++) {
-          nodes.push(new NodeElement('-'));
+          const dashNode = new NodeElement('-');
+          if (note.span) dashNode.melodySpan = { ...note.span };
+          nodes.push(dashNode);
         }
         // Append dot nodes
         for (let dt = 0; dt < (node.dots ?? 0); dt++) {
-          nodes.push(new NodeElement('.'));
+          const dotNode = new NodeElement('.');
+          if (note.span) dotNode.melodySpan = { ...note.span };
+          nodes.push(dotNode);
         }
 
         beat = beat.add(note.duration);
       }
     }
 
-    if (lyricsIdx !== numWords) {
-      throw new Error(`${lyricsIdx} notes != ${numWords} words`);
+    if (totalNotesToMatchLyrics !== numWords) {
+      this.errors.push(`${totalNotesToMatchLyrics} notes != ${numWords} words`);
     }
 
     return sections;
@@ -900,11 +759,21 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
   let time: ParsedTime | null = null;
   let s = '';
+  let sOffsetMap: number[] = [];
 
   // Parse melody
+  let melodyOffset = 0;
   const melodyLines = melodyText.split(/\r?\n/);
-  for (let line of melodyLines) {
-    line = line.trim();
+  for (const rawLine of melodyLines) {
+    const trimmed = rawLine.trim();
+    const leadingSpaces = rawLine.indexOf(trimmed);
+    const lineStart = melodyOffset + (leadingSpaces >= 0 ? leadingSpaces : 0);
+
+    const nlMatch = melodyText.slice(melodyOffset + rawLine.length).match(/^(\r?\n)/);
+    const nlLen = nlMatch ? nlMatch[0].length : 0;
+    melodyOffset += rawLine.length + nlLen;
+
+    const line = trimmed;
     if (line === 'break') break;
     if (!line || line.startsWith('//')) continue;
 
@@ -915,31 +784,55 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
       parser.key = parseKey(line.slice(5).trim());
     } else if (line.startsWith('<time>')) {
       if (time) {
-        parser.appendTimeSignature(time, s);
+        parser.appendTimeSignature(time, s, sOffsetMap);
       }
       time = parseTime(line.slice(6).trim());
       s = '';
+      sOffsetMap = [];
     } else if (line.startsWith('<slur_starts_at_leading_note>')) {
       parser.slurStartsAtLeadingNote = Boolean(parseInt(line.slice(29).trim(), 10));
     } else if (line.startsWith('<group_8th_notes>')) {
       parser.group8thNotes = Boolean(parseInt(line.slice(17).trim(), 10));
     } else {
-      s += line.replace(/\s+/g, '');
+      for (let c = 0; c < line.length; c++) {
+        const ch = line[c];
+        if (!/\s/.test(ch)) {
+          s += ch;
+          sOffsetMap.push(lineStart + c);
+        }
+      }
     }
   }
   if (time) {
-    parser.appendTimeSignature(time, s);
+    parser.appendTimeSignature(time, s, sOffsetMap);
   }
   parser.trySplitNotes();
   parser.makeTiesConsistent();
 
   // Parse lyrics
+  let lyricOffset = 0;
   const lyricsLines = lyricsText.split(/\r?\n/);
-  for (let line of lyricsLines) {
-    line = line.trim();
-    let cleaned = line;
-    for (const c of ' ,.!?　。，、！？') {
-      cleaned = cleaned.replaceAll(c, '');
+  for (const rawLine of lyricsLines) {
+    const trimmed = rawLine.trim();
+    const leadingSpaces = rawLine.indexOf(trimmed);
+    const lineStart = lyricOffset + (leadingSpaces >= 0 ? leadingSpaces : 0);
+
+    const nlMatch = lyricsText.slice(lyricOffset + rawLine.length).match(/^(\r?\n)/);
+    const nlLen = nlMatch ? nlMatch[0].length : 0;
+    lyricOffset += rawLine.length + nlLen;
+
+    const line = trimmed;
+    let cleaned = '';
+    const lineSpans: SourceSpan[] = [];
+    let c = 0;
+    while (c < line.length) {
+      const codePoint = line.codePointAt(c)!;
+      const ch = String.fromCodePoint(codePoint);
+      if (!' ,.!?　。，、！？'.includes(ch)) {
+        cleaned += ch;
+        lineSpans.push({ start: lineStart + c, end: lineStart + c + ch.length });
+      }
+      c += ch.length;
     }
     if (cleaned === 'break') break;
     if (!cleaned || cleaned.startsWith('//')) continue;
@@ -947,11 +840,14 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
     if (cleaned.startsWith('<tag>')) {
       const tag = cleaned.slice(5).trim();
       parser.lyrics.push([tag, []]);
+      parser.lyricsSpans.push([tag, []]);
     } else {
       if (parser.lyrics.length === 0) {
-        throw new Error(`No <tag> specified before ${line}`);
+        parser.lyrics.push([' ', []]);
+        parser.lyricsSpans.push([' ', []]);
       }
       parser.lyrics[parser.lyrics.length - 1][1].push(cleaned);
+      parser.lyricsSpans[parser.lyricsSpans.length - 1][1].push(lineSpans);
     }
   }
 
@@ -969,5 +865,6 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
     key: keyDisplay,
     time: firstTime,
     sections,
+    errors: parser.errors.length > 0 ? parser.errors : undefined,
   };
 }

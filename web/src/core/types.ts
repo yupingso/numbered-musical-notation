@@ -79,6 +79,11 @@ export interface TimeSignature {
   hyphen?: number;
 }
 
+export interface SourceSpan {
+  start: number;
+  end: number;
+}
+
 export class Note {
   static readonly REST = 0;
   static readonly REST_AT_END = -1;
@@ -91,6 +96,7 @@ export class Note {
   lines: number | null; // >0: dash count; <0: -underlines count
   dots: number | null;
   tie: [boolean, boolean]; // [tied with prev, tied with next]
+  span?: SourceSpan;
 
   constructor(
     acc: Accidental | null,
@@ -144,11 +150,35 @@ export class Note {
     return this._name !== Note.REST_AT_END && !this.tie[0];
   }
 
+  toPitchString(): string {
+    if (this.isRest) {
+      if (this._name === Note.REST_AT_END) return 'o';
+      if (this._name === Note.REST_TO_MATCH_LYRICS) return 'O';
+      return '0';
+    }
+    let p = '';
+    if (this.acc === Accidental.Sharp) p += '#';
+    else if (this.acc === Accidental.Flat) p += '$';
+    else if (this.acc === Accidental.Natural) p += '%';
+
+    p += String(this.name);
+
+    if (this.octave > 0) {
+      p += "'".repeat(this.octave);
+    } else if (this.octave < 0) {
+      p += ','.repeat(-this.octave);
+    }
+    return p;
+  }
+
   copy(): Note {
     const note = new Note(this.acc, this._name, this.octave, this.duration);
     note.lines = this.lines;
     note.dots = this.dots;
     note.tie = [this.tie[0], this.tie[1]];
+    if (this.span) {
+      note.span = { ...this.span };
+    }
     return note;
   }
 }
@@ -165,6 +195,8 @@ export class NodeElement {
   lines: number | null;
   dots: number | null;
   text: string | null = null; // Associated lyric character
+  melodySpan?: SourceSpan;
+  lyricSpan?: SourceSpan;
 
   constructor(note: Note | '-' | '.') {
     if (note instanceof Note) {
@@ -250,11 +282,13 @@ export interface SongAST {
   key: string;
   time: TimeSignature;
   sections: Section[];
+  errors?: string[];
 }
 
 export interface SheetSlide {
   slideIndex: number;
-  sectionTag: string | null; // e.g. "主歌", null if continuation slide
+  sectionTag: string | null; // e.g. "主歌", null if continuation slide (rendered in SVG)
+  sectionName?: string; // name of the section this slide belongs to (for UI deck header and badge)
   line1: OutputLine;
   line2: OutputLine | null;
 }
