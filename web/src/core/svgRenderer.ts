@@ -19,6 +19,59 @@ interface CurveLayout {
   disYMiddle?: number;
 }
 
+export interface LineLayout {
+  scaledNodePositions: number[];
+  scaledBarPositions: number[];
+  scale: number;
+  contentWidth: number;
+}
+
+export function calculateLineLayout(
+  line: OutputLine,
+  targetWidth: number = 888
+): LineLayout {
+  const nodes = line.nodes;
+  const nodePositions: number[] = new Array(nodes.length).fill(0);
+
+  let rawPos = 0;
+  const barPositions: number[] = [];
+
+  for (let k = 0; k < line.bars.length; k++) {
+    const bar = line.bars[k];
+    if (k > 0) {
+      rawPos -= 2.5;
+      barPositions.push(rawPos);
+      rawPos += 7.5;
+    }
+
+    const nextBar = line.bars[k + 1];
+    const endIdx = nextBar ? nextBar.nodeIndex : nodes.length;
+
+    for (let idx = bar.nodeIndex; idx < endIdx; idx++) {
+      const node = nodes[idx];
+      if (node.type !== NodeType.NOTE) {
+        rawPos -= 2.5;
+        nodePositions[idx] = rawPos;
+        rawPos += 7.5;
+        continue;
+      }
+      nodePositions[idx] = rawPos;
+      rawPos += 10;
+    }
+  }
+
+  const scale = rawPos > 0 ? targetWidth / rawPos : 1;
+  const scaledNodePositions = nodePositions.map((p) => p * scale);
+  const scaledBarPositions = barPositions.map((p) => p * scale);
+
+  return {
+    scaledNodePositions,
+    scaledBarPositions,
+    scale,
+    contentWidth: targetWidth,
+  };
+}
+
 export class SvgRenderer {
   // 4:3 Aspect Ratio standard dimensions
   static readonly SLIDE_WIDTH = 1024;
@@ -125,42 +178,12 @@ export class SvgRenderer {
     noteFontSize: number = 94
   ): { svg: string; height: number } {
     const nodes = line.nodes;
-    const nodePositions: number[] = new Array(nodes.length).fill(0);
-
-    let rawPos = 0;
-    const barPositions: number[] = [];
-
-    for (let k = 0; k < line.bars.length; k++) {
-      const bar = line.bars[k];
-      if (k > 0) {
-        rawPos -= 2.5;
-        barPositions.push(rawPos);
-        rawPos += 7.5;
-      }
-
-      const nextBar = line.bars[k + 1];
-      const endIdx = nextBar ? nextBar.nodeIndex : nodes.length;
-
-      for (let idx = bar.nodeIndex; idx < endIdx; idx++) {
-        const node = nodes[idx];
-        if (node.type !== NodeType.NOTE) {
-          rawPos -= 2.5;
-          nodePositions[idx] = rawPos;
-          rawPos += 7.5;
-          continue;
-        }
-        nodePositions[idx] = rawPos;
-        rawPos += 10;
-      }
-    }
-
-    const scale = rawPos > 0 ? targetWidth / rawPos : 1;
-    const scaledNodePositions = nodePositions.map((p) => p * scale);
-    const scaledBarPositions = barPositions.map((p) => p * scale);
+    const { scaledNodePositions, scaledBarPositions, scale } =
+      calculateLineLayout(line, targetWidth);
 
     const elements: string[] = [];
     const noteHalfWidth = Math.round(noteFontSize * 0.28);
-    const ptToPx = noteFontSize * 0.10;
+    const ptToPx = noteFontSize * 0.1;
 
     // 1. Draw Barlines
     const barY1 = -Math.round(noteFontSize * 0.53);
@@ -494,6 +517,7 @@ export function splitAstIntoSlides(sections: { tag: string; lines: OutputLine[] 
       slides.push({
         slideIndex: slideIndex++,
         sectionTag: isFirstPageInSection ? section.tag : null,
+        sectionName: section.tag,
         line1: section.lines[j],
         line2: j + 1 < section.lines.length ? section.lines[j + 1] : null,
       });
