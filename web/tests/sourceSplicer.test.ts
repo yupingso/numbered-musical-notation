@@ -646,15 +646,15 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     expect(suoNode.melodySpan).toBeDefined();
 
     // In EXAMPLE_SONG_01 without hyphen, modifying the last 6_ in [666]_ from 0.5 to 1.5
-    // must break across the bar boundary into [66]_ 6_ ~ | 6 rather than throwing an error
+    // breaks across the bar boundary into [66]_ 6_ ~ 6 rather than throwing an error
     const spliced = spliceMelodyNoteDuration(
       EXAMPLE_SONG_01.melody,
       suoNode.melodySpan!,
       1.5
     );
 
-    expect(spliced).toContain('[66]_ 6_ ~ | 6');
-    expect(spliced.split('\n')[3]).toBe("[555]_ | 3. [55566]_ 4 6. [66]_ 6_ ~ | 6");
+    expect(spliced).toContain('[66]_ 6_ ~ 6');
+    expect(spliced.split('\n')[3]).toBe("[555]_ | 3. [55566]_ 4 6. [66]_ 6_ ~ 6");
 
     // Verify it parses cleanly without throwing "Note goes beyond one bar in time 4/4"
     const reAst = parseClassicSong(spliced, EXAMPLE_SONG_01.lyrics);
@@ -686,7 +686,7 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     // Now change back to 0.5 beats
     const restored = spliceMelodyNoteDuration(broken, brokenSuoNode.melodySpan!, 0.5);
     expect(restored).toContain('[66]_ 6_');
-    expect(restored).not.toContain('6_ ~ | 6');
+    expect(restored).not.toContain('6_ ~ 6');
 
     const reAst = parseClassicSong(restored, EXAMPLE_SONG_01.lyrics);
     expect(reAst.errors).toBeUndefined();
@@ -700,15 +700,15 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     const line2 = ast.sections[0].lines[2];
     const suoNode = line2.nodes.find((n) => n.text === '所')!;
 
-    // First break to 1.5 beats: [666]_ becomes [66]_ 6_ ~ | 6
+    // First break to 1.5 beats: [666]_ becomes [66]_ 6_ ~ 6
     const broken = spliceMelodyNoteDuration(EXAMPLE_SONG_01.melody, suoNode.melodySpan!, 1.5);
     const brokenAst = parseClassicSong(broken, EXAMPLE_SONG_01.lyrics);
     const brokenSuoNode = brokenAst.sections[0].lines[2].nodes.find((n) => n.text === '所')!;
 
     // Modify pitch only (e.g. from 6 to 5)
     const pitchUpdated = spliceMelodyPitch(broken, brokenSuoNode.melodySpan!, '5');
-    expect(pitchUpdated).toContain('[66]_ 5_ ~ | 5');
-    expect(pitchUpdated).not.toContain('5_ ~ | 6');
+    expect(pitchUpdated).toContain('[66]_ 5_ ~ 5');
+    expect(pitchUpdated).not.toContain('5_ ~ 6');
 
     // Verify it parses cleanly with both tied parts having pitch 5
     const reAst = parseClassicSong(pitchUpdated, EXAMPLE_SONG_01.lyrics);

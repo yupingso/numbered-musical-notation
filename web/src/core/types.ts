@@ -84,6 +84,47 @@ export interface SourceSpan {
   end: number;
 }
 
+export interface BracketContext {
+  tokenSpan: SourceSpan;
+  durationSuffix: string;
+  indexInGroup: number;
+  totalInGroup: number;
+  pitchSpan: SourceSpan;
+}
+
+export interface PitchValue {
+  accidental: Accidental | null;
+  name: number;
+  octave: number;
+  restType?: '0' | 'o' | 'O';
+  isRest: boolean;
+}
+
+export interface UnitSegment {
+  segmentIndex: number;
+  barIndex: number;
+  beatInBar: Fraction;
+  duration: Fraction;
+  span: SourceSpan;
+  pitchSpan?: SourceSpan;
+  rawToken: string;
+  tiedPrev: boolean;
+  tiedNext: boolean;
+  bracket?: BracketContext;
+}
+
+export interface MelodicUnit {
+  id: string;
+  pitch: PitchValue;
+  duration: Fraction;
+  lyric?: string;
+  lyricSpan?: SourceSpan;
+  slurToNext?: boolean;
+  slurFromPrev?: boolean;
+  segments: UnitSegment[];
+  melodySpan: SourceSpan;
+}
+
 export class Note {
   static readonly REST = 0;
   static readonly REST_AT_END = -1;
@@ -96,7 +137,10 @@ export class Note {
   lines: number | null; // >0: dash count; <0: -underlines count
   dots: number | null;
   tie: [boolean, boolean]; // [tied with prev, tied with next]
-  span?: SourceSpan;
+  span?: SourceSpan; // pitch span
+  tokenSpan?: SourceSpan; // full token span
+  rawToken?: string;
+  bracket?: BracketContext;
 
   constructor(
     acc: Accidental | null,
@@ -179,6 +223,13 @@ export class Note {
     if (this.span) {
       note.span = { ...this.span };
     }
+    if (this.tokenSpan) {
+      note.tokenSpan = { ...this.tokenSpan };
+    }
+    note.rawToken = this.rawToken;
+    if (this.bracket) {
+      note.bracket = { ...this.bracket };
+    }
     return note;
   }
 }
@@ -197,6 +248,7 @@ export class NodeElement {
   text: string | null = null; // Associated lyric character
   melodySpan?: SourceSpan;
   lyricSpan?: SourceSpan;
+  unitId?: string;
 
   constructor(note: Note | '-' | '.') {
     if (note instanceof Note) {
@@ -266,6 +318,7 @@ export interface BarInfo {
 
 export class OutputLine {
   nodes: NodeElement[] = [];
+  units: MelodicUnit[] = [];
   bars: BarInfo[] = [];
   ties: NodeRange[] = [];
   slurs: NodeRange[] = [];

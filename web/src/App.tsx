@@ -6,14 +6,14 @@ import { parseClassicSong } from './core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from './core/svgRenderer';
 import { rasterizeSvgInBrowser } from './core/rasterizerWeb';
 import { appendSlidesToPptx } from './core/pptxExporter';
-import { NodeElement, Note, SheetSlide } from './core/types';
+import { MelodicUnit, NodeElement, SheetSlide } from './core/types';
 import {
   isValidPitchString,
+  modifyMelodicUnitDuration,
   performSynchronizedFlowToNext,
   performSynchronizedFlowToPrev,
   performSynchronizedLineBreak,
   performSynchronizedLineMerge,
-  rebarMelodyWithDurationEdit,
   spliceLyricChar,
   spliceMelodyNoteDuration,
   spliceMelodyPitch,
@@ -281,46 +281,34 @@ export const App: React.FC = () => {
     [lyricsText, recordHistory]
   );
 
-  const handleEditMelodyPitch = useCallback(
-    (node: NodeElement, newPitch: string) => {
-      if (!node.melodySpan) return;
-      if (!isValidPitchString(newPitch)) return;
-      recordHistory();
-      const newMelody = spliceMelodyPitch(melodyText, node.melodySpan, newPitch);
-      setMelodyText(newMelody);
-    },
-    [melodyText, recordHistory]
-  );
+  const handleEditMelody = useCallback(
+    (target: MelodicUnit | NodeElement, newDuration?: number, newPitch?: string) => {
+      const unit = 'segments' in target ? target : undefined;
+      const targetSpan = unit ? unit.melodySpan : target.melodySpan;
+      if (!targetSpan && !unit) return;
 
-  const handleEditMelodyDuration = useCallback(
-    (node: NodeElement, newDuration: number, newPitch?: string) => {
-      if (!node.melodySpan) return;
-      recordHistory();
-      const curDuration =
-        node.value instanceof Note ? node.value.duration.toNumber() : undefined;
-      const durationActuallyChanged =
-        curDuration === undefined || Math.abs(newDuration - curDuration) > 1e-6;
+      if (newPitch && !isValidPitchString(newPitch)) return;
 
-      if (!durationActuallyChanged && newPitch) {
-        const newMelody = spliceMelodyPitch(melodyText, node.melodySpan, newPitch);
+      recordHistory();
+
+      // If duration is not changed, perform an in-place pitch splice directly
+      if (newDuration === undefined) {
+        if (!newPitch) return;
+        const newMelody = unit
+          ? spliceMelodyPitch(melodyText, unit, newPitch)
+          : spliceMelodyPitch(melodyText, targetSpan!, newPitch);
         setMelodyText(newMelody);
         return;
       }
 
-      let newMelody = rebarMelodyWithDurationEdit(
-        melodyText,
-        node.melodySpan,
-        newDuration,
-        newPitch
-      );
-      if (newMelody === melodyText) {
-        newMelody = spliceMelodyNoteDuration(
-          melodyText,
-          node.melodySpan,
-          newDuration,
-          newPitch
-        );
+      // Duration changed (with or without pitch change)
+      let newMelody: string;
+      if (unit) {
+        newMelody = modifyMelodicUnitDuration(melodyText, unit, newDuration, newPitch);
+      } else {
+        newMelody = spliceMelodyNoteDuration(melodyText, targetSpan!, newDuration, newPitch);
       }
+
       setMelodyText(newMelody);
     },
     [melodyText, recordHistory]
@@ -431,8 +419,7 @@ export const App: React.FC = () => {
             onFlowToNext={handleFlowToNext}
             onFlowToPrev={handleFlowToPrev}
             onEditLyric={handleEditLyric}
-            onEditMelodyPitch={handleEditMelodyPitch}
-            onEditMelodyDuration={handleEditMelodyDuration}
+            onEditMelody={handleEditMelody}
           />
 
           {activeHelp && (

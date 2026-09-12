@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { isValidPitchString, normalizePitchString } from '../core/sourceSplicer';
 import { SvgRenderer } from '../core/svgRenderer';
-import { NodeElement, Note, SheetSlide } from '../core/types';
+import { MelodicUnit, NodeElement, Note, SheetSlide } from '../core/types';
 import { InteractiveSlideCanvas, SelectedUnitContext } from './InteractiveSlideCanvas';
 
 export interface SlideDeckStatus {
@@ -23,16 +23,18 @@ interface SlideDeckViewProps {
   onFlowToNext?: (prevNode: NodeElement, lineEndNode: NodeElement) => void;
   onFlowToPrev?: (upToNode: NodeElement, prevLineEndNode: NodeElement) => void;
   onEditLyric?: (node: NodeElement, newChar: string) => void;
-  onEditMelodyPitch?: (node: NodeElement, newPitch: string) => void;
-  onEditMelodyDuration?: (node: NodeElement, newDuration: number, newPitch?: string) => void;
+  onEditMelody?: (
+    target: MelodicUnit | NodeElement,
+    newDuration?: number,
+    newPitch?: string
+  ) => void;
 }
 
 interface NoteInspectorBarProps {
   selectedUnit: SelectedUnitContext;
-  onEditMelodyPitch?: (node: NodeElement, newPitch: string) => void;
-  onEditMelodyDuration?: (
-    node: NodeElement,
-    newDuration: number,
+  onEditMelody?: (
+    target: MelodicUnit | NodeElement,
+    newDuration?: number,
     newPitch?: string
   ) => void;
   onEditLyric?: (node: NodeElement, newChar: string) => void;
@@ -41,8 +43,7 @@ interface NoteInspectorBarProps {
 
 const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
   selectedUnit,
-  onEditMelodyPitch,
-  onEditMelodyDuration,
+  onEditMelody,
   onEditLyric,
   onClose,
 }) => {
@@ -76,14 +77,12 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
       dVal > 0 &&
       Math.abs(dVal - selectedUnit.initialDuration) > 1e-6;
 
-    if (isDurationChanged && onEditMelodyDuration) {
-      onEditMelodyDuration(targetNode, dVal, isPitchChanged ? pVal : undefined);
-    } else if (
-      isPitchChanged &&
-      onEditMelodyPitch &&
-      targetNode.value instanceof Note
-    ) {
-      onEditMelodyPitch(targetNode, pVal);
+    if (onEditMelody && (isDurationChanged || isPitchChanged)) {
+      onEditMelody(
+        selectedUnit.unit || targetNode,
+        isDurationChanged ? dVal : undefined,
+        isPitchChanged ? pVal : undefined
+      );
     }
 
     if (lVal && onEditLyric && targetNode.text && lVal !== selectedUnit.initialLyric) {
@@ -97,8 +96,7 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
     editPitchVal,
     editLyricVal,
     editDurationVal,
-    onEditMelodyDuration,
-    onEditMelodyPitch,
+    onEditMelody,
     onEditLyric,
     onClose,
   ]);
@@ -237,8 +235,7 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
   onFlowToNext,
   onFlowToPrev,
   onEditLyric,
-  onEditMelodyPitch,
-  onEditMelodyDuration,
+  onEditMelody,
 }) => {
   // Aggregate all slides: Slide 1 (Title Card) + Slides 2..N+1 (Notation Slides)
   const allSlides = useMemo(() => {
@@ -690,8 +687,7 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
               <NoteInspectorBar
                 key={`inspector-${selectedUnit.lineIdx}-${selectedUnit.nodeIdx}-${selectedUnit.targetNode.melodySpan?.start ?? ''}`}
                 selectedUnit={selectedUnit}
-                onEditMelodyPitch={onEditMelodyPitch}
-                onEditMelodyDuration={onEditMelodyDuration}
+                onEditMelody={onEditMelody}
                 onEditLyric={onEditLyric}
                 onClose={() => setSelectedUnit(null)}
               />

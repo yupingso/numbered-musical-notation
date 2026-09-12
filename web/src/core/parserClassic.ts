@@ -1,6 +1,7 @@
 import {
   Accidental,
   Fraction,
+  MelodicUnit,
   Note,
   NodeElement,
   NodeType,
@@ -9,6 +10,7 @@ import {
   Section,
   SongAST,
   SourceSpan,
+  UnitSegment,
 } from './types';
 
 export type KeySignature = 'solfa' | [number, number]; // [pitch (1-7), accidental (-1, 0, 1)]
@@ -349,6 +351,7 @@ export class ClassicSongParser {
             tie
           );
 
+          note.rawToken = match[0];
           if (offsetMap) {
             const pitchPosInRaw = pitchesRaw.indexOf(pitch, currentPitchOffsetInRaw);
             const pitchStartInBar = matchIdxInBar + tie0Len + (pitchPosInRaw >= 0 ? pitchPosInRaw : 0);
@@ -362,6 +365,27 @@ export class ClassicSongParser {
             }
             if (pitchPosInRaw >= 0) {
               currentPitchOffsetInRaw = pitchPosInRaw + pitch.length;
+            }
+
+            const tokenStartInBar = matchIdxInBar;
+            const tokenEndInBar = matchIdxInBar + match[0].length;
+            const tokenStartInS = barStartInS + tokenStartInBar;
+            const tokenEndInS = barStartInS + tokenEndInBar;
+            if (tokenStartInS >= 0 && tokenEndInS <= offsetMap.length && note.span) {
+              const tokenSpan: SourceSpan = {
+                start: offsetMap[tokenStartInS],
+                end: offsetMap[tokenEndInS - 1] + 1,
+              };
+              note.tokenSpan = tokenSpan;
+              if (isBracketed) {
+                note.bracket = {
+                  tokenSpan,
+                  durationSuffix: durationStr,
+                  indexInGroup: k,
+                  totalInGroup: pitchMatches.length,
+                  pitchSpan: { ...note.span },
+                };
+              }
             }
           }
 
@@ -497,9 +521,11 @@ export class ClassicSongParser {
     let lineAdded = false;
     let lineNodeIdxPrev = -1;
     let potentialSlurStartLineNodeIdx: number | null = null;
+    let currentUnit: MelodicUnit | null = null;
     const sections: Section[] = [];
 
-    for (const [time, startBeat, notes] of this.melody) {
+    for (let b = 0; b < this.melody.length; b++) {
+      const [time, startBeat, notes] = this.melody[b];
       let beat = startBeat;
       for (let k = 0; k < notes.length; k++) {
         const note = notes[k];
@@ -524,11 +550,13 @@ export class ClassicSongParser {
             lineAdded = true;
             lineNodeIdxPrev = -1;
             potentialSlurStartLineNodeIdx = null;
+            currentUnit = null;
           }
         }
         if (sections[sections.length - 1].lines.length === 0) {
           sections[sections.length - 1].lines.push(new OutputLine());
           lineAdded = true;
+          currentUnit = null;
         }
 
         const curSection = sections[sections.length - 1];
@@ -576,11 +604,123 @@ export class ClassicSongParser {
         if (note.span) {
           node.melodySpan = { ...note.span };
         }
-        if (note.tie[0]) {
+
+        const prevNote =
+          lineNodeIdxPrev >= 0 && nodes[lineNodeIdxPrev].value instanceof Note
+            ? (nodes[lineNodeIdxPrev].value as Note)
+            : null;
+        const isSamePitch =
+          prevNote !== null &&
+          note.name === prevNote.name &&
+          note.acc === prevNote.acc &&
+          note.octave === prevNote.octave &&
+          note.isRest === prevNote.isRest;
+
+        const segmentSpan: SourceSpan =
+          note.tokenSpan || (note.span ? { ...note.span } : { start: 0, end: 0 });
+
+        if (note.tie[0] && isSamePitch && currentUnit !== null) {
+          // True Tie: continuation segment of currentUnit
           ties.push({ start: lineNodeIdxPrev, end: lineNodeIdx });
           (node.value as Note).tie[0] = true;
           (nodes[lineNodeIdxPrev].value as Note).tie[1] = true;
+
+          const segment: UnitSegment = {
+            segmentIndex: currentUnit.segments.length,
+            barIndex: b,
+            beatInBar: beat,
+            duration: note.duration,
+            span: segmentSpan,
+            pitchSpan: note.span ? { ...note.span } : undefined,
+            rawToken: note.rawToken || '',
+            tiedPrev: true,
+            tiedNext: note.tie[1],
+            bracket: note.bracket ? { ...note.bracket } : undefined,
+          };
+          currentUnit.segments.push(segment);
+          currentUnit.duration = currentUnit.duration.add(note.duration);
+          node.unitId = currentUnit.id;
+        } else if (note.tie[0] && !isSamePitch) {
+          // Choice A: Melodic Slur between different pitches (e.g. 1~2 in melody)
+          slurs.push({ start: lineNodeIdxPrev, end: lineNodeIdx });
+          (node.value as Note).tie[0] = false;
+          if (currentUnit) {
+            currentUnit.slurToNext = true;
+          }
+
+          const segment: UnitSegment = {
+            segmentIndex: 0,
+            barIndex: b,
+            beatInBar: beat,
+            duration: note.duration,
+            span: segmentSpan,
+            pitchSpan: note.span ? { ...note.span } : undefined,
+            rawToken: note.rawToken || '',
+            tiedPrev: false,
+            tiedNext: note.tie[1],
+            bracket: note.bracket ? { ...note.bracket } : undefined,
+          };
+          const unitId = `u_${sections.length - 1}_${curSection.lines.length - 1}_${line.units.length}`;
+          const newUnit: MelodicUnit = {
+            id: unitId,
+            pitch: {
+              accidental: note.acc,
+              name: note.name,
+              octave: note.octave,
+              restType:
+                note._name === Note.REST_AT_END
+                  ? 'o'
+                  : note._name === Note.REST_TO_MATCH_LYRICS
+                  ? 'O'
+                  : note.isRest
+                  ? '0'
+                  : undefined,
+              isRest: note.isRest,
+            },
+            duration: note.duration,
+            slurFromPrev: true,
+            segments: [segment],
+            melodySpan: note.span ? { ...note.span } : { ...segmentSpan },
+          };
+          line.units.push(newUnit);
+          currentUnit = newUnit;
+          node.unitId = newUnit.id;
         } else {
+          // Normal note or lyric slur
+          const segment: UnitSegment = {
+            segmentIndex: 0,
+            barIndex: b,
+            beatInBar: beat,
+            duration: note.duration,
+            span: segmentSpan,
+            pitchSpan: note.span ? { ...note.span } : undefined,
+            rawToken: note.rawToken || '',
+            tiedPrev: false,
+            tiedNext: note.tie[1],
+            bracket: note.bracket ? { ...note.bracket } : undefined,
+          };
+          const unitId = `u_${sections.length - 1}_${curSection.lines.length - 1}_${line.units.length}`;
+          const newUnit: MelodicUnit = {
+            id: unitId,
+            pitch: {
+              accidental: note.acc,
+              name: note.name,
+              octave: note.octave,
+              restType:
+                note._name === Note.REST_AT_END
+                  ? 'o'
+                  : note._name === Note.REST_TO_MATCH_LYRICS
+                  ? 'O'
+                  : note.isRest
+                  ? '0'
+                  : undefined,
+              isRest: note.isRest,
+            },
+            duration: note.duration,
+            segments: [segment],
+            melodySpan: note.span ? { ...note.span } : { ...segmentSpan },
+          };
+
           if (note.toMatchLyrics) {
             totalNotesToMatchLyrics++;
             if (lyricsIdx < numWords) {
@@ -590,19 +730,28 @@ export class ClassicSongParser {
                 if (lyricChar !== 'O') {
                   this.errors.push(`Note O cannot match lyrics "${lyricChar}"`);
                 }
-              } else if (lyricChar !== '~') {
+              } else if (lyricChar === '~') {
+                newUnit.slurFromPrev = true;
+                if (currentUnit) currentUnit.slurToNext = true;
+              } else {
                 node.text = lyricChar;
                 if (lyricSpan) {
                   node.lyricSpan = { ...lyricSpan };
+                }
+                newUnit.lyric = lyricChar;
+                if (lyricSpan) {
+                  newUnit.lyricSpan = { ...lyricSpan };
                 }
               }
               lyricsIdx++;
               sectionAdded = false;
               lineAdded = false;
-            } else {
-              // More notes than lyrics: align left, last notes do not have lyrics below them
             }
           }
+
+          line.units.push(newUnit);
+          currentUnit = newUnit;
+          node.unitId = newUnit.id;
         }
 
         nodes.push(node);
@@ -612,12 +761,14 @@ export class ClassicSongParser {
         for (let d = 0; d < (node.lines ?? 0); d++) {
           const dashNode = new NodeElement('-');
           if (note.span) dashNode.melodySpan = { ...note.span };
+          if (currentUnit) dashNode.unitId = currentUnit.id;
           nodes.push(dashNode);
         }
         // Append dot nodes
         for (let dt = 0; dt < (node.dots ?? 0); dt++) {
           const dotNode = new NodeElement('.');
           if (note.span) dotNode.melodySpan = { ...note.span };
+          if (currentUnit) dotNode.unitId = currentUnit.id;
           nodes.push(dotNode);
         }
 

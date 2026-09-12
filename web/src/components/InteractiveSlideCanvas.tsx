@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { calculateLineLayout, SvgRenderer } from '../core/svgRenderer';
-import { NodeElement, NodeType, Note, OutputLine, SheetSlide } from '../core/types';
+import { MelodicUnit, NodeElement, NodeType, Note, OutputLine, SheetSlide } from '../core/types';
 
 export interface SelectedUnitContext {
   lineIdx: number;
   nodeIdx: number;
   targetNode: NodeElement;
+  unit?: MelodicUnit;
   initialPitch: string;
   initialLyric: string;
   initialDuration: number;
@@ -65,11 +66,17 @@ export function buildUnitContext(
   } else if (curNote) {
     initialPitch = curNote.toPitchString();
   }
-  const initialLyric = targetNode.text || '';
+  const melodicUnit = targetNode.unitId
+    ? line.units?.find((u) => u.id === targetNode.unitId)
+    : undefined;
+
+  const initialLyric = melodicUnit?.lyric || targetNode.text || '';
 
   const endIdx = lastChildIdx !== undefined ? lastChildIdx : nodeIdx;
   let initialDuration = 1;
-  if (curNote) {
+  if (melodicUnit) {
+    initialDuration = melodicUnit.duration.toNumber();
+  } else if (curNote) {
     let durSum = curNote.duration.toNumber();
     for (let k = nodeIdx + 1; k <= endIdx; k++) {
       const child = line.nodes[k];
@@ -147,6 +154,7 @@ export function buildUnitContext(
     lineIdx,
     nodeIdx,
     targetNode,
+    unit: melodicUnit,
     initialPitch,
     initialLyric,
     initialDuration,

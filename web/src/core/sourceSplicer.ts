@@ -1,5 +1,5 @@
-import { KeySignature, parsePitch, parseTime } from './parserClassic';
-import { NodeElement, Note, SourceSpan } from './types';
+import { KeySignature, parseClassicSong, parsePitch, parseTime } from './parserClassic';
+import { MelodicUnit, NodeElement, Note, SourceSpan } from './types';
 import {
   formatSingleNoteToken,
   decomposeNoteAcrossBars,
@@ -194,9 +194,19 @@ export function isValidPitchString(pitch: string, key: KeySignature = [1, 0]): b
  */
 export function spliceMelodyPitch(
   melodyText: string,
-  melodySpan: SourceSpan,
+  target: SourceSpan | MelodicUnit,
   newPitch: string
 ): string {
+  if ('segments' in target && 'pitch' in target) {
+    return modifyMelodicUnitDuration(
+      melodyText,
+      target as MelodicUnit,
+      target.duration.toNumber(),
+      newPitch
+    );
+  }
+
+  const melodySpan = target as SourceSpan;
   if (melodySpan.start < 0 || melodySpan.end > melodyText.length) {
     return melodyText;
   }
@@ -244,6 +254,307 @@ interface ParsedMelodyNoteItem {
   barIndex: number;
 }
 
+function getBar0PickupOffset(melodyText: string, measureDuration: number): number {
+  const firstPipeIdx = melodyText.indexOf('|');
+  const bar0Text = firstPipeIdx >= 0 ? melodyText.slice(0, firstPipeIdx) : melodyText;
+  const cleaned = bar0Text
+    .split(/\r?\n/)
+    .filter((line) => {
+      const t = line.trim();
+      return t && !t.startsWith('//') && !t.startsWith('<');
+    })
+    .join(' ');
+
+  const patternPitch = "[#$%]?[0-9a-zA-Z][',]*";
+  const patternPitches = `\\[(?:${patternPitch})+\\]`;
+  const patternDuration = '(?:[_=]+|-*)\\.*(?:/3)?';
+  const tokenRegex = new RegExp(
+    `(${patternPitches}|${patternPitch})(${patternDuration})`,
+    'g'
+  );
+
+  let bar0Dur = 0;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRegex.exec(cleaned)) !== null) {
+    const isBracketed = m[1].startsWith('[');
+    const durStr = m[2];
+    const dur = parseDurationString(durStr);
+    if (isBracketed) {
+      const pitches = m[1].match(new RegExp(patternPitch, 'g')) || [];
+      bar0Dur += pitches.length * dur;
+    } else {
+      bar0Dur += dur;
+    }
+  }
+
+  if (firstPipeIdx >= 0 && bar0Dur > 0 && bar0Dur < measureDuration) {
+    return measureDuration - bar0Dur;
+  }
+  return 0;
+}
+
+function isNoteInBar0Pickup(melodyText: string, unit: MelodicUnit): boolean {
+  if (unit.segments[0]?.barIndex !== 0) return false;
+  const firstPipeIdx = melodyText.indexOf('|');
+  if (firstPipeIdx < 0) return false;
+  const segStart = unit.segments[0]?.span?.start ?? 0;
+  return segStart < firstPipeIdx;
+}
+
+/**
+ * Modifies the duration (and optionally pitch) of a MelodicUnit directly from the AST.
+ * Implements the user's Canonical Bracket Splitting Rule:
+ * - If the unit is inside a bracket [...], partition remaining notes into left and right groups:
+ *   - If |group| == 1, drops the bracket for that group.
+ *   - If |group| >= 2, keeps the bracket for that group.
+ * - If the unit is unbracketed, replaces its token in-place or decomposes across barlines with ties.
+ * - If the unit spans multiple tied segments across barlines, updates the entire tied unit in-place.
+ */
+export function modifyMelodicUnitDuration(
+  melodyText: string,
+  unit: MelodicUnit,
+  newDuration: number,
+  newPitch?: string
+): string {
+  if (isNaN(newDuration) || newDuration <= 0) {
+    return melodyText;
+  }
+  if (newPitch && !isValidPitchString(newPitch)) {
+    return melodyText;
+  }
+
+  // Determine measure duration and time signature from <time>
+  let measureDuration = 4;
+  let parsedTime: ParsedTime = { upper: 4, lower: 4, hyphen: 32 };
+  const timeMatch = melodyText.match(/<time>\s*([^\r\n]+)/);
+  if (timeMatch) {
+    parsedTime = parseTime(timeMatch[1]);
+    if (parsedTime.upper > 0 && parsedTime.lower > 0) {
+      measureDuration = (parsedTime.upper / parsedTime.lower) * 4;
+    }
+  }
+
+  // Determine target pitch string
+  let targetPitch = newPitch ? normalizePitchString(newPitch.trim()) : '';
+  if (!targetPitch) {
+    if (unit.segments[0]?.pitchSpan) {
+      targetPitch = melodyText
+        .slice(unit.segments[0].pitchSpan.start, unit.segments[0].pitchSpan.end)
+        .trim();
+    }
+    if (!targetPitch) {
+      if (unit.pitch.isRest) {
+        targetPitch = unit.pitch.restType || '0';
+      } else {
+        let p = '';
+        if (unit.pitch.accidental === 1) p += '#';
+        else if (unit.pitch.accidental === -1) p += 'b';
+        p += unit.pitch.name.toString();
+        if (unit.pitch.octave > 0) p += "'".repeat(unit.pitch.octave);
+        else if (unit.pitch.octave < 0) p += ','.repeat(-unit.pitch.octave);
+        targetPitch = p;
+      }
+    }
+  }
+
+  const curDuration = unit.duration.toNumber();
+  const startBeatInBar = unit.segments[0].beatInBar.toNumber();
+  const pickupOffset = isNoteInBar0Pickup(melodyText, unit)
+    ? getBar0PickupOffset(melodyText, measureDuration)
+    : 0;
+  const effectiveStartBeat = Math.max(0, startBeatInBar - pickupOffset);
+  const spaceLeftInBar = measureDuration - effectiveStartBeat;
+  const crossesBar = newDuration > spaceLeftInBar + 1e-6;
+
+  // Handle bracketed unit
+  if (unit.segments[0]?.bracket) {
+    const bracket = unit.segments[0].bracket;
+    const bracketText = melodyText.slice(bracket.tokenSpan.start, bracket.tokenSpan.end);
+    const bracketMatch = bracketText.match(/^(~?)\[(.*?)\]([_=\-./3]*)(~?)$/);
+    if (bracketMatch) {
+      const leadingTie = bracketMatch[1];
+      const pitchesRaw = bracketMatch[2];
+      const durationSuffix = bracketMatch[3] || bracket.durationSuffix;
+      const trailingTie = bracketMatch[4];
+
+      const pitches = pitchesRaw.match(/[#$%]?[0-9a-zA-Z][',]*/g) || [];
+      const targetIdx = bracket.indexInGroup;
+
+      if (Math.abs(curDuration - newDuration) < 1e-6) {
+        // Pitch only changed inside bracket
+        pitches[targetIdx] = targetPitch;
+        const newBracket = `${leadingTie}[${pitches.join('')}]${durationSuffix}${trailingTie}`;
+        return (
+          melodyText.slice(0, bracket.tokenSpan.start) +
+          newBracket +
+          melodyText.slice(bracket.tokenSpan.end)
+        );
+      }
+
+      // Duration changed: Canonical Bracket Splitting
+      const leftPitches = pitches.slice(0, targetIdx);
+      const rightPitches = pitches.slice(targetIdx + 1);
+
+      let leftPart = '';
+      if (leftPitches.length === 1) {
+        leftPart = leftPitches[0] + durationSuffix;
+      } else if (leftPitches.length >= 2) {
+        leftPart = '[' + leftPitches.join('') + ']' + durationSuffix;
+      }
+
+      let rightPart = '';
+      if (rightPitches.length === 1) {
+        rightPart = rightPitches[0] + durationSuffix;
+      } else if (rightPitches.length >= 2) {
+        rightPart = '[' + rightPitches.join('') + ']' + durationSuffix;
+      }
+
+      if (!crossesBar) {
+        let targetPart = formatSingleNoteToken(targetPitch, newDuration);
+        if (leadingTie) {
+          if (leftPart) leftPart = leadingTie + leftPart;
+          else targetPart = leadingTie + targetPart;
+        }
+        if (trailingTie) {
+          if (rightPart) rightPart = rightPart + trailingTie;
+          else targetPart = targetPart + trailingTie;
+        }
+        const parts = [leftPart, targetPart, rightPart].filter(Boolean);
+        const replacement = parts.join(' ');
+        return (
+          melodyText.slice(0, bracket.tokenSpan.start) +
+          replacement +
+          melodyText.slice(bracket.tokenSpan.end)
+        );
+      } else {
+        const { bars: noteBars } = decomposeNoteAcrossBars(
+          targetPitch,
+          newDuration,
+          effectiveStartBeat,
+          parsedTime
+        );
+        const bar0Tokens = [leftPart, ...noteBars[0]].filter(Boolean);
+        if (leadingTie && bar0Tokens.length > 0) {
+          bar0Tokens[0] = leadingTie + bar0Tokens[0];
+        }
+
+        const lastBarIdx = noteBars.length - 1;
+        const lastBarTokens = [...noteBars[lastBarIdx], rightPart].filter(Boolean);
+        if (trailingTie && lastBarTokens.length > 0) {
+          lastBarTokens[lastBarTokens.length - 1] =
+            lastBarTokens[lastBarTokens.length - 1] + trailingTie;
+        }
+
+        const assembledBars: string[] = [bar0Tokens.join(' ')];
+        for (let b = 1; b < lastBarIdx; b++) {
+          assembledBars.push(noteBars[b].join(' '));
+        }
+        assembledBars.push(lastBarTokens.join(' '));
+
+        const textAfter = melodyText.slice(bracket.tokenSpan.end);
+        const existingBarlineMatch = textAfter.match(/^([ \t]*\|[ \t]*)/);
+        if (existingBarlineMatch) {
+          const afterBarline = textAfter.slice(existingBarlineMatch[0].length);
+          const replacement =
+            assembledBars[0] + existingBarlineMatch[1] + assembledBars.slice(1).join(' ');
+          return (
+            melodyText.slice(0, bracket.tokenSpan.start) +
+            replacement +
+            (afterBarline.startsWith(' ') || afterBarline.startsWith('\n') ? '' : ' ') +
+            afterBarline
+          );
+        } else {
+          const replacement = assembledBars.join(' ');
+          return (
+            melodyText.slice(0, bracket.tokenSpan.start) +
+            replacement +
+            melodyText.slice(bracket.tokenSpan.end)
+          );
+        }
+      }
+    }
+  }
+
+  // Handle single unbracketed note or multi-segment tied note
+  const replaceStart = unit.segments[0].span.start;
+  const replaceEnd = unit.segments[unit.segments.length - 1].span.end;
+
+  const alreadyHasLeadingTie = melodyText.slice(0, replaceStart).trimEnd().endsWith('~');
+  const leadingTie =
+    !alreadyHasLeadingTie &&
+    (unit.segments[0].tiedPrev || unit.segments[0].rawToken?.startsWith('~'));
+
+  const alreadyHasTrailingTie = melodyText.slice(replaceEnd).trimStart().startsWith('~');
+  const trailingTie =
+    !alreadyHasTrailingTie &&
+    (unit.slurToNext ||
+      unit.segments[unit.segments.length - 1].tiedNext ||
+      unit.segments[unit.segments.length - 1].rawToken?.endsWith('~'));
+
+  if (!crossesBar) {
+    let replacement = formatSingleNoteToken(targetPitch, newDuration);
+    if (leadingTie) replacement = '~' + replacement;
+    if (trailingTie) replacement = replacement + '~';
+
+    if (unit.segments.length > 1) {
+      const textBetween = melodyText.slice(replaceStart, replaceEnd);
+      if (textBetween.includes('|')) {
+        replacement = replacement + ' |';
+      }
+    }
+
+    return (
+      melodyText.slice(0, replaceStart) +
+      replacement +
+      melodyText.slice(replaceEnd)
+    );
+  } else {
+    const { bars: noteBars } = decomposeNoteAcrossBars(
+      targetPitch,
+      newDuration,
+      effectiveStartBeat,
+      parsedTime
+    );
+    if (leadingTie && noteBars[0].length > 0) {
+      noteBars[0][0] = '~' + noteBars[0][0];
+    }
+    if (trailingTie) {
+      const lastB = noteBars[noteBars.length - 1];
+      if (lastB.length > 0) {
+        lastB[lastB.length - 1] = lastB[lastB.length - 1] + '~';
+      }
+    }
+
+    const textAfter = melodyText.slice(replaceEnd);
+    const textBetween = melodyText.slice(replaceStart, replaceEnd);
+    const hadBarlineInside = textBetween.includes('|');
+
+    if (unit.segments.length === 1) {
+      const existingBarlineMatch = textAfter.match(/^([ \t]*\|[ \t]*)/);
+      if (existingBarlineMatch) {
+        const afterBarline = textAfter.slice(existingBarlineMatch[0].length);
+        const bar0Str = noteBars[0].join(' ');
+        const restBarsStr = noteBars.slice(1).map((b) => b.join(' ')).join(' ');
+        const replacement = bar0Str + existingBarlineMatch[1] + restBarsStr;
+        return (
+          melodyText.slice(0, replaceStart) +
+          replacement +
+          (afterBarline.startsWith(' ') || afterBarline.startsWith('\n') ? '' : ' ') +
+          afterBarline
+        );
+      }
+    }
+
+    const barSep = hadBarlineInside ? ' | ' : ' ';
+    const replacement = noteBars.map((b) => b.join(' ')).join(barSep);
+    return (
+      melodyText.slice(0, replaceStart) +
+      replacement +
+      melodyText.slice(replaceEnd)
+    );
+  }
+}
+
 /**
  * Strategy A: Minimal In-Place Duration Edit.
  * Surgically replaces only the target note's token (including attached dashes/modifiers
@@ -253,15 +564,56 @@ interface ParsedMelodyNoteItem {
  */
 export function spliceMelodyNoteDuration(
   melodyText: string,
-  targetSpan: SourceSpan,
+  target: SourceSpan | MelodicUnit,
   newDuration?: number,
   newPitch?: string
 ): string {
+  if ('segments' in target && 'pitch' in target) {
+    const dur = newDuration !== undefined ? newDuration : target.duration.toNumber();
+    return modifyMelodicUnitDuration(melodyText, target as MelodicUnit, dur, newPitch);
+  }
+
+  const targetSpan = target as SourceSpan;
   if (targetSpan.start < 0 || targetSpan.end > melodyText.length) {
     return melodyText;
   }
   if (newPitch && !isValidPitchString(newPitch)) {
     return melodyText;
+  }
+
+  try {
+    const ast = parseClassicSong(melodyText, '');
+    let matchedUnit: MelodicUnit | undefined;
+    for (const sec of ast.sections) {
+      for (const line of sec.lines) {
+        for (const u of line.units) {
+          const isMatch =
+            u.melodySpan.start === targetSpan.start ||
+            (u.melodySpan.start <= targetSpan.start && targetSpan.start < u.melodySpan.end) ||
+            u.segments.some(
+              (seg) =>
+                (seg.pitchSpan &&
+                  seg.pitchSpan.start <= targetSpan.start &&
+                  targetSpan.start < seg.pitchSpan.end) ||
+                (!seg.bracket &&
+                  seg.span.start <= targetSpan.start &&
+                  targetSpan.start < seg.span.end)
+            );
+          if (isMatch) {
+            matchedUnit = u;
+            break;
+          }
+        }
+        if (matchedUnit) break;
+      }
+      if (matchedUnit) break;
+    }
+    if (matchedUnit) {
+      const dur = newDuration !== undefined ? newDuration : matchedUnit.duration.toNumber();
+      return modifyMelodicUnitDuration(melodyText, matchedUnit, dur, newPitch);
+    }
+  } catch {
+    // fallback to regex below
   }
 
   // Determine measure duration and time signature from <time>
@@ -551,7 +903,7 @@ export function spliceMelodyNoteDuration(
       if (existingBarlineMatch) {
         const afterBarline = textAfter.slice(existingBarlineMatch[0].length);
         const replacement =
-          assembledBars[0] + existingBarlineMatch[1] + assembledBars.slice(1).join(' | ');
+          assembledBars[0] + existingBarlineMatch[1] + assembledBars.slice(1).join(' ');
         return (
           melodyText.slice(0, targetNote.tokenStart) +
           replacement +
@@ -559,7 +911,7 @@ export function spliceMelodyNoteDuration(
           afterBarline
         );
       } else {
-        const replacement = assembledBars.join(' | ');
+        const replacement = assembledBars.join(' ');
         return (
           melodyText.slice(0, targetNote.tokenStart) +
           replacement +
@@ -635,14 +987,15 @@ export function spliceMelodyNoteDuration(
     }
 
     const textAfter = melodyText.slice(replaceEnd);
-    const hadBarlineInside = targetNote.barIndex !== parsedNotes[endTargetIdx].barIndex;
+    const textBetween = melodyText.slice(replaceStart, replaceEnd);
+    const hadBarlineInside = textBetween.includes('|');
 
-    if (!hadBarlineInside) {
+    if (endTargetIdx === targetIdx) {
       const existingBarlineMatch = textAfter.match(/^([ \t]*\|[ \t]*)/);
       if (existingBarlineMatch) {
         const afterBarline = textAfter.slice(existingBarlineMatch[0].length);
         const bar0Str = noteBars[0].join(' ');
-        const restBarsStr = noteBars.slice(1).map((b) => b.join(' ')).join(' | ');
+        const restBarsStr = noteBars.slice(1).map((b) => b.join(' ')).join(' ');
         const replacement = bar0Str + existingBarlineMatch[1] + restBarsStr;
         return (
           melodyText.slice(0, replaceStart) +
@@ -653,7 +1006,8 @@ export function spliceMelodyNoteDuration(
       }
     }
 
-    const assembled = noteBars.map((b) => b.join(' ')).join(' | ');
+    const barSep = hadBarlineInside ? ' | ' : ' ';
+    const assembled = noteBars.map((b) => b.join(' ')).join(barSep);
     return melodyText.slice(0, replaceStart) + assembled + textAfter;
   }
 }
