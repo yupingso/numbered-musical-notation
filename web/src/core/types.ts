@@ -331,10 +331,18 @@ export interface Section {
   lines: OutputLine[];
 }
 
+export interface SongMetadata {
+  title?: string;
+  subtitle?: string;
+  album?: string;
+  credits?: string;
+}
+
 export interface SongAST {
   key: string;
   time: TimeSignature;
   sections: Section[];
+  metadata?: SongMetadata;
   errors?: string[];
 }
 

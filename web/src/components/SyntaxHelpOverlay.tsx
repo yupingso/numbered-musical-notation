@@ -166,6 +166,35 @@ export const SyntaxHelpOverlay: React.FC<SyntaxHelpOverlayProps> = ({ type, onCl
             </>
           ) : (
             <>
+              {/* Section 0: 封面投影片標題資訊 */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
+                  <span>👑</span>
+                  <span>封面投影片標題與資訊</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span className="text-slate-400">主標題</span>
+                    <kbd className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono font-bold rounded border border-slate-700">&lt;title&gt; 詩歌名稱</kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span className="text-slate-400">副標題 / 英文</span>
+                    <kbd className="px-2 py-0.5 bg-slate-800 text-amber-300 font-mono font-bold rounded border border-slate-700">&lt;subtitle&gt; English</kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span className="text-slate-400">專輯</span>
+                    <kbd className="px-2 py-0.5 bg-slate-800 text-yellow-300 font-mono font-bold rounded border border-slate-700">&lt;album&gt; 讚美之泉 22</kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <span className="text-slate-400">詞曲作者</span>
+                    <kbd className="px-2 py-0.5 bg-slate-800 text-slate-200 font-mono font-bold rounded border border-slate-700">&lt;credits&gt; 詞： / 曲：</kbd>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-400 leading-relaxed">
+                  將標題資訊置於歌詞開頭，封面投影片與 PPTX 導出將自動顯示客製化封面卡片。
+                </p>
+              </div>
+
               {/* Section 1: 段落與投影片分頁 */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-2 flex items-center gap-1.5">

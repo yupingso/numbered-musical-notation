@@ -1,10 +1,102 @@
 import JSZip from 'jszip';
+import { SongMetadata } from './types';
+import {
+  calculateTitleLayout,
+  splitTitleLines,
+  calculateSubtitleLayout,
+  splitSubtitleLines,
+} from './svgRenderer';
 
 export interface PptxExportOptions {
   /** Template .pptx file buffer (e.g. template.pptx containing Slide 1 title card) */
   templateData: ArrayBuffer | Uint8Array;
   /** High-resolution PNG images for slides 2 to N */
   slidePngImages: (Uint8Array | Buffer)[];
+  /** Optional song metadata to customize Slide 1 title card */
+  metadata?: SongMetadata;
+}
+
+function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&"']/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&apos;';
+      default: return c;
+    }
+  });
+}
+
+/**
+ * Updates Slide 1 XML shapes to reflect custom SongMetadata if present.
+ */
+export function updateSlide1Xml(slide1Xml: string, metadata?: SongMetadata): string {
+  if (!metadata) return slide1Xml;
+
+  let result = slide1Xml;
+
+  // 1. Update Title in Shape 43
+  if (metadata.title) {
+    const lines = splitTitleLines(metadata.title);
+    const layout = calculateTitleLayout(metadata.title);
+    const sz = Math.round((layout.fontSize * 10600) / 150);
+
+    const paragraphsXml = lines
+      .map(
+        (line) =>
+          `<a:p><a:pPr algn="ctr"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPts val="11"/></a:spcBef><a:spcAft><a:spcPts val="11"/></a:spcAft></a:pPr><a:r><a:rPr b="1" lang="zh-TW" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffcc00"/></a:solidFill><a:latin typeface="標楷體"/><a:ea typeface="標楷體"/></a:rPr><a:t>${escapeXml(
+            line
+          )}</a:t></a:r><a:endParaRPr b="0" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Arial"/></a:endParaRPr></a:p>`
+      )
+      .join('');
+
+    result = result.replace(
+      /(<p:cNvPr id="43"[^>]*>.*?<p:txBody>.*?<a:bodyPr[^>]*>.*?<\/a:bodyPr>)(?:.*?)(<\/p:txBody>)/s,
+      `$1${paragraphsXml}$2`
+    );
+  }
+
+  // 2. Update Subtitle in Shape 44
+  if (metadata.subtitle) {
+    const subLines = splitSubtitleLines(metadata.subtitle);
+    const isTitleMultiLine = splitTitleLines(metadata.title).length > 1;
+    const subLayout = calculateSubtitleLayout(metadata.subtitle, isTitleMultiLine);
+    const sz = Math.round((subLayout.fontSize * 4800) / 48);
+
+    const paragraphsXml = subLines
+      .map(
+        (line) =>
+          `<a:p><a:pPr algn="ctr"><a:lnSpc><a:spcPct val="100000"/></a:lnSpc><a:spcBef><a:spcPts val="11"/></a:spcBef><a:spcAft><a:spcPts val="11"/></a:spcAft></a:pPr><a:r><a:rPr b="1" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffcc00"/></a:solidFill><a:latin typeface="Times New Roman"/><a:ea typeface="標楷體"/></a:rPr><a:t>${escapeXml(
+            line
+          )}</a:t></a:r><a:endParaRPr b="0" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Arial"/></a:endParaRPr></a:p>`
+      )
+      .join('');
+
+    result = result.replace(
+      /(<p:cNvPr id="44"[^>]*>.*?<p:txBody>.*?<a:bodyPr[^>]*>.*?<\/a:bodyPr>)(?:.*?)(<\/p:txBody>)/s,
+      `$1${paragraphsXml}$2`
+    );
+  }
+
+  // 3. Update Album in P1
+  if (metadata.album) {
+    result = result.replace(
+      /(<a:p>.*?sz="5400".*?<a:t>)(?:[^<]*)(<\/a:t><\/a:r>)(?:<a:r>.*?<\/a:r>)*(.*?<\/a:p>)/s,
+      `$1${escapeXml(metadata.album)}$2$3`
+    );
+  }
+
+  // 4. Update Credits in P4
+  if (metadata.credits) {
+    result = result.replace(
+      /(<a:p>.*?algn="ctr".*?sz="4000".*?<a:t>)(?:[^<]*)(<\/a:t><\/a:r>)(?:<a:r>.*?<\/a:r>)*(.*?<\/a:p>)/s,
+      `$1${escapeXml(metadata.credits)}$2$3`
+    );
+  }
+
+  return result;
 }
 
 /**
@@ -154,6 +246,15 @@ export async function appendSlidesToPptx(options: PptxExportOptions): Promise<Ui
 
   // Update presentation.xml
   const updatedPresXml = presXml.replace('</p:sldIdLst>', `${newSldIdXmlElements}</p:sldIdLst>`);
+
+  // Update Slide 1 (title slide) with custom SongMetadata if provided
+  if (options.metadata) {
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')?.async('text');
+    if (slide1Xml) {
+      const updatedSlide1Xml = updateSlide1Xml(slide1Xml, options.metadata);
+      zip.file('ppt/slides/slide1.xml', updatedSlide1Xml);
+    }
+  }
 
   // Write updated XML files back to zip
   zip.file('[Content_Types].xml', updatedContentTypes);

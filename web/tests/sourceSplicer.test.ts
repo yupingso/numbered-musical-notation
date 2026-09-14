@@ -759,6 +759,80 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     );
     expect(rebarSpliced).toBe(spliced);
   });
+
+  describe('Title Slide Metadata Parsing & Splicing', () => {
+    it('parses title slide metadata from lyrics without consuming musical syllables', async () => {
+      const { parseSongMetadata } = await import('../src/core/parserClassic');
+      const melody = `<time> 4/4\n| 1 2 3 4 |`;
+      const lyrics = `<title> 不動搖的信心\n<subtitle> Unshakeable Faith\n<album> 讚美之泉 22\n<credits> 詞：游智婷 / 曲：曾祥怡\n<tag> 主歌\n主 賜 給 我`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      expect(ast.metadata).toEqual({
+        title: '不動搖的信心',
+        subtitle: 'Unshakeable Faith',
+        album: '讚美之泉 22',
+        credits: '詞：游智婷 / 曲：曾祥怡',
+      });
+      expect(parseSongMetadata(lyrics, melody)).toEqual(ast.metadata);
+
+      // Verify that the 4 lyrics words aligned with the 4 melody notes
+      expect(ast.sections[0].lines[0].nodes.map((n) => n.text).filter(Boolean)).toEqual([
+        '主',
+        '賜',
+        '給',
+        '我',
+      ]);
+    });
+
+    it('surgically inserts new metadata at the top of lyricsText (updateLyricsMetadata)', async () => {
+      const { updateLyricsMetadata } = await import('../src/core/sourceSplicer');
+      const lyrics = `<tag> 主歌\n主 賜 給 我`;
+      const updated = updateLyricsMetadata(lyrics, {
+        title: '不動搖的信心',
+        subtitle: 'Unshakeable Faith',
+      });
+
+      expect(updated).toBe(
+        `<title> 不動搖的信心\n<subtitle> Unshakeable Faith\n<tag> 主歌\n主 賜 給 我`
+      );
+    });
+
+    it('surgically updates existing metadata in-place without touching other lines', async () => {
+      const { updateLyricsMetadata } = await import('../src/core/sourceSplicer');
+      const lyrics = `<title> 舊標題\n<subtitle> Old Subtitle\n<tag> 主歌\n主 賜 給 我`;
+      const updated = updateLyricsMetadata(lyrics, {
+        title: '新標題',
+        album: '讚美之泉 22',
+      });
+
+      expect(updated).toBe(
+        `<title> 新標題\n<subtitle> Old Subtitle\n<album> 讚美之泉 22\n<tag> 主歌\n主 賜 給 我`
+      );
+    });
+
+    it('removes metadata directive when value is cleared with empty string', async () => {
+      const { updateLyricsMetadata } = await import('../src/core/sourceSplicer');
+      const lyrics = `<title> 標題\n<subtitle> 英文\n<tag> 主歌\n主 賜 給 我`;
+      const updated = updateLyricsMetadata(lyrics, {
+        subtitle: '',
+      });
+
+      expect(updated).toBe(`<title> 標題\n<tag> 主歌\n主 賜 給 我`);
+    });
+
+    it('serializes multi-line title and subtitle using literal \\n in updateLyricsMetadata', async () => {
+      const { updateLyricsMetadata } = await import('../src/core/sourceSplicer');
+      const lyrics = `<tag> 主歌\n主 賜 給 我`;
+      const updated = updateLyricsMetadata(lyrics, {
+        title: '一生一世\n在主的殿中',
+        subtitle: 'All the Days of My Life\nIn the House of the Lord',
+      });
+
+      expect(updated).toBe(
+        `<title> 一生一世\\n在主的殿中\n<subtitle> All the Days of My Life\\nIn the House of the Lord\n<tag> 主歌\n主 賜 給 我`
+      );
+    });
+  });
 });
 
 

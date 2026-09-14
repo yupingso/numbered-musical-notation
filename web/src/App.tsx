@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback, useRef, useTransition } from '
 import { InputContainer } from './components/InputContainer';
 import { SlideDeckView, SlideDeckStatus } from './components/SlideDeckView';
 import { SyntaxHelpOverlay, HelpType } from './components/SyntaxHelpOverlay';
-import { parseClassicSong } from './core/parserClassic';
+import { parseClassicSong, parseSongMetadata } from './core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from './core/svgRenderer';
 import { rasterizeSvgInBrowser } from './core/rasterizerWeb';
 import { appendSlidesToPptx } from './core/pptxExporter';
-import { MelodicUnit, NodeElement, SheetSlide } from './core/types';
+import { MelodicUnit, NodeElement, SheetSlide, SongMetadata } from './core/types';
 import {
   isValidPitchString,
   modifyMelodicUnitDuration,
@@ -17,6 +17,7 @@ import {
   spliceLyricChar,
   spliceMelodyNoteDuration,
   spliceMelodyPitch,
+  updateLyricsMetadata,
 } from './core/sourceSplicer';
 import { EXAMPLE_SONG_01 } from './examples';
 
@@ -32,6 +33,11 @@ export const App: React.FC = () => {
     { slideIndex: number; sectionTag: string | null; sectionName?: string; svg: string }[]
   >([]);
   const [rawSlides, setRawSlides] = useState<SheetSlide[]>([]);
+  const [metadata, setMetadata] = useState<SongMetadata>(() => {
+    const initMelody = localStorage.getItem('nmn_melody') || EXAMPLE_SONG_01.melody;
+    const initLyrics = localStorage.getItem('nmn_lyrics') || EXAMPLE_SONG_01.lyrics;
+    return parseSongMetadata(initLyrics, initMelody);
+  });
   const [alignmentStatus, setAlignmentStatus] = useState<SlideDeckStatus | null>(null);
 
   const [, startTransition] = useTransition();
@@ -64,6 +70,7 @@ export const App: React.FC = () => {
 
         setRawSlides(slides);
         setSlidesSvg(rendered);
+        setMetadata(ast.metadata ?? {});
 
         if (ast.errors && ast.errors.length > 0) {
           setAlignmentStatus({
@@ -106,6 +113,7 @@ export const App: React.FC = () => {
     redoStackRef.current.push({ melodyText, lyricsText });
     setMelodyText(prev.melodyText);
     setLyricsText(prev.lyricsText);
+    setMetadata(parseSongMetadata(prev.lyricsText, prev.melodyText));
   }, [melodyText, lyricsText]);
 
   const handleRedo = useCallback(() => {
@@ -114,6 +122,7 @@ export const App: React.FC = () => {
     undoStackRef.current.push({ melodyText, lyricsText });
     setMelodyText(next.melodyText);
     setLyricsText(next.lyricsText);
+    setMetadata(parseSongMetadata(next.lyricsText, next.melodyText));
   }, [melodyText, lyricsText]);
 
   // Live render with 150ms debounce
@@ -186,6 +195,7 @@ export const App: React.FC = () => {
       const pptxBytes = await appendSlidesToPptx({
         templateData: templateBuffer,
         slidePngImages: pngImages,
+        metadata,
       });
 
       const blob = new Blob([pptxBytes.buffer as ArrayBuffer], {
@@ -206,10 +216,21 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleUpdateMetadata = useCallback(
+    (newMeta: Partial<SongMetadata>) => {
+      recordHistory();
+      const updated = updateLyricsMetadata(lyricsText, newMeta);
+      setLyricsText(updated);
+      setMetadata((prev) => ({ ...prev, ...newMeta }));
+    },
+    [lyricsText, recordHistory]
+  );
+
   const handleLoadExample = () => {
     recordHistory();
     setMelodyText(EXAMPLE_SONG_01.melody);
     setLyricsText(EXAMPLE_SONG_01.lyrics);
+    setMetadata(parseSongMetadata(EXAMPLE_SONG_01.lyrics, EXAMPLE_SONG_01.melody));
   };
 
   const handleBreakLine = useCallback(
@@ -414,6 +435,8 @@ export const App: React.FC = () => {
             rawSlides={rawSlides}
             status={alignmentStatus}
             melodyText={melodyText}
+            metadata={metadata}
+            onUpdateMetadata={handleUpdateMetadata}
             onBreakLine={handleBreakLine}
             onMergeLine={handleMergeLine}
             onFlowToNext={handleFlowToNext}

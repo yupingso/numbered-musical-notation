@@ -158,11 +158,11 @@ describe('SvgRenderer', () => {
   it('renders Slide 1 Title card matching template.pptx fonts and font sizes', () => {
     const titleSvg = SvgRenderer.renderTitleSlideSvg();
     expect(titleSvg).toContain('viewBox="0 0 1024 768"');
-    // Series: 54pt -> 76px, bold 標楷體, yellow
+    // Album: 54pt -> 76px, bold 標楷體, yellow
     expect(titleSvg).toContain('font-size="76"');
     expect(titleSvg).toContain('font-weight="bold"');
     expect(titleSvg).toContain('fill="#ffff00"');
-    expect(titleSvg).toContain('>讚美之泉 22<');
+    expect(titleSvg).toContain('>專輯<');
 
     // Title: 106pt -> 150px, bold 標楷體, gold
     expect(titleSvg).toContain('font-size="150"');
@@ -178,6 +178,112 @@ describe('SvgRenderer', () => {
     expect(titleSvg).toContain('font-weight="normal"');
     expect(titleSvg).toContain('fill="#ffffff"');
     expect(titleSvg).toContain('>詞： / 曲：<');
+  });
+
+  it('renders Slide 1 Title card with customized SongMetadata', () => {
+    const titleSvg = SvgRenderer.renderTitleSlideSvg({
+      title: '不動搖的信心',
+      subtitle: 'Unshakeable Faith',
+      album: '讚美之泉 22',
+      credits: '詞：游智婷 / 曲：曾祥怡',
+    });
+    expect(titleSvg).toContain('>不動搖的信心<');
+    expect(titleSvg).toContain('>Unshakeable Faith<');
+    expect(titleSvg).toContain('>讚美之泉 22<');
+    expect(titleSvg).toContain('>詞：游智婷 / 曲：曾祥怡<');
+  });
+
+  it('renders 2-line title with Shift+Enter or \\n and auto-adjusts layout', async () => {
+    const { calculateTitleLayout, splitTitleLines } = await import('../src/core/svgRenderer');
+
+    expect(splitTitleLines('一生一世\\n在主的殿中')).toEqual(['一生一世', '在主的殿中']);
+    expect(splitTitleLines('一生一世\n在主的殿中')).toEqual(['一生一世', '在主的殿中']);
+
+    const layout = calculateTitleLayout('一生一世\\n在主的殿中');
+    expect(layout.lines).toEqual(['一生一世', '在主的殿中']);
+    expect(layout.fontSize).toBe(105);
+    expect(layout.lineYCoords).toEqual([305, 425]);
+    expect(layout.subtitleY).toBe(545);
+
+    const titleSvg = SvgRenderer.renderTitleSlideSvg({
+      title: '一生一世\\n在主的殿中',
+      subtitle: 'All the Days of My Life',
+    });
+    expect(titleSvg).toContain('y="305"');
+    expect(titleSvg).toContain('>一生一世<');
+    expect(titleSvg).toContain('y="425"');
+    expect(titleSvg).toContain('>在主的殿中<');
+    expect(titleSvg).toContain('y="545"');
+    expect(titleSvg).toContain('>All the Days of My Life<');
+  });
+
+  it('auto-scales font size down for long single-line titles', async () => {
+    const { calculateTitleLayout } = await import('../src/core/svgRenderer');
+
+    // 10 CJK characters: 10 units -> 880 / 10 = 88px
+    const layout10 = calculateTitleLayout('我們要在主裡堅定不移');
+    expect(layout10.lines).toHaveLength(1);
+    expect(layout10.fontSize).toBe(88);
+
+    const titleSvg10 = SvgRenderer.renderTitleSlideSvg({
+      title: '我們要在主裡堅定不移',
+    });
+    expect(titleSvg10).toContain('font-size="88"');
+
+    // 12 CJK characters: 12 units -> 880 / 12 = 73.3px -> clamped to min 75px
+    const layout12 = calculateTitleLayout('我們要在主裡永遠堅定不移');
+    expect(layout12.fontSize).toBe(75);
+  });
+
+  it('renders 2-line subtitle with Shift+Enter or \\n and auto-adjusts layout', async () => {
+    const { calculateSubtitleLayout, splitSubtitleLines } = await import('../src/core/svgRenderer');
+
+    expect(splitSubtitleLines('All the Days of My Life\\nIn the House of the Lord')).toEqual([
+      'All the Days of My Life',
+      'In the House of the Lord',
+    ]);
+
+    const subLayout = calculateSubtitleLayout(
+      'All the Days of My Life\\nIn the House of the Lord',
+      false
+    );
+    expect(subLayout.lines).toHaveLength(2);
+    expect(subLayout.fontSize).toBe(48);
+    expect(subLayout.lineYCoords).toEqual([500, 557]);
+
+    const titleSvg = SvgRenderer.renderTitleSlideSvg({
+      title: '一生一世',
+      subtitle: 'All the Days of My Life\\nIn the House of the Lord',
+    });
+    expect(titleSvg).toContain('y="500"');
+    expect(titleSvg).toContain('>All the Days of My Life<');
+    expect(titleSvg).toContain('y="557"');
+    expect(titleSvg).toContain('>In the House of the Lord<');
+  });
+
+  it('preserves empty trailing line when preserveEmpty is true for active typing', async () => {
+    const {
+      calculateTitleLayout,
+      splitTitleLines,
+      calculateSubtitleLayout,
+      splitSubtitleLines,
+    } = await import('../src/core/svgRenderer');
+
+    // Title: trailing newline after Shift+Enter
+    expect(splitTitleLines('一生一世\n', true)).toEqual(['一生一世', '']);
+    const titleLayout = calculateTitleLayout('一生一世\n', true);
+    expect(titleLayout.lines).toHaveLength(2);
+    expect(titleLayout.fontSize).toBe(105);
+    expect(titleLayout.lineYCoords).toEqual([305, 425]);
+
+    // Subtitle: trailing newline after Shift+Enter
+    expect(splitSubtitleLines('All the Days of My Life\n', true)).toEqual([
+      'All the Days of My Life',
+      '',
+    ]);
+    const subLayout = calculateSubtitleLayout('All the Days of My Life\n', false, true);
+    expect(subLayout.lines).toHaveLength(2);
+    expect(subLayout.fontSize).toBe(48);
   });
 
   it('centers notation lines horizontally with balanced margins and vertical separation', () => {

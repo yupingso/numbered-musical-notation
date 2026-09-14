@@ -66,4 +66,63 @@ describe('pptxExporter with template.pptx', () => {
     const slideMatches = presXml.match(/<p:sldId /g) || [];
     expect(slideMatches).toHaveLength(9);
   });
+
+  it('updates Slide 1 title card with custom metadata in exported PPTX', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '不動搖的信心',
+        subtitle: 'Unshakeable Faith',
+        album: '讚美之泉 22',
+        credits: '詞：游智婷 / 曲：曾祥怡',
+      },
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1Xml).toContain('不動搖的信心');
+    expect(slide1Xml).toContain('Unshakeable Faith');
+    expect(slide1Xml).toContain('讚美之泉 22');
+    expect(slide1Xml).toContain('詞：游智婷 / 曲：曾祥怡');
+  });
+
+  it('updates Slide 1 with 2-line title in exported PPTX', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '一生一世\n在主的殿中',
+        subtitle: 'All the Days of My Life',
+      },
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1Xml).toContain('一生一世');
+    expect(slide1Xml).toContain('在主的殿中');
+    expect(slide1Xml).toContain('All the Days of My Life');
+    expect(slide1Xml).toContain('sz="7420"');
+  });
+
+  it('updates Slide 1 with 2-line subtitle in exported PPTX', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '一生一世',
+        subtitle: 'All the Days of My Life\nIn the House of the Lord',
+      },
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1Xml).toContain('一生一世');
+    expect(slide1Xml).toContain('All the Days of My Life');
+    expect(slide1Xml).toContain('In the House of the Lord');
+    expect(slide1Xml).toContain('sz="4800"');
+  });
 });

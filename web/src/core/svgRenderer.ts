@@ -5,6 +5,7 @@ import {
   OutputLine,
   SheetSlide,
   Accidental,
+  SongMetadata,
 } from './types';
 
 interface CurveLayout {
@@ -479,32 +480,206 @@ export class SvgRenderer {
   /**
    * Renders the Slide 1 Title card matching ppt/template.pptx typography and layout.
    */
-  static renderTitleSlideSvg(options?: {
-    series?: string;
-    title?: string;
-    subtitle?: string;
-    credits?: string;
-  }): string {
+  static renderTitleSlideSvg(options?: SongMetadata): string {
     const W = SvgRenderer.SLIDE_WIDTH;
     const H = SvgRenderer.SLIDE_HEIGHT;
-    const series = options?.series ?? '讚美之泉 22';
-    const title = options?.title ?? '標題';
-    const subtitle = options?.subtitle ?? 'Title';
-    const credits = options?.credits ?? '詞： / 曲：';
+    const album = options?.album ? options.album : '專輯';
+    const credits = options?.credits ? options.credits : '詞： / 曲：';
+
+    const titleLayout = calculateTitleLayout(options?.title);
+    const isTitleMultiLine = titleLayout.lines.length > 1;
+    const subtitleLayout = calculateSubtitleLayout(options?.subtitle, isTitleMultiLine);
+
+    const titleElements = titleLayout.lines
+      .map(
+        (line, idx) =>
+          `<text x="512" y="${titleLayout.lineYCoords[idx]}" fill="#ffcc00" font-family="${SvgRenderer.LYRIC_FONT}" font-size="${titleLayout.fontSize}" font-weight="bold" text-anchor="middle">${escapeXml(line)}</text>`
+      )
+      .join('\n  ');
+
+    const subtitleElements = subtitleLayout.lines
+      .map(
+        (line, idx) =>
+          `<text x="512" y="${subtitleLayout.lineYCoords[idx]}" fill="#ffcc00" font-family="${SvgRenderer.MUSIC_FONT}" font-size="${subtitleLayout.fontSize}" font-weight="bold" text-anchor="middle">${escapeXml(line)}</text>`
+      )
+      .join('\n  ');
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
   <rect width="${W}" height="${H}" fill="#000000" />
-  <!-- Series/Album Name (54pt -> 76px, bold 標楷體) -->
-  <text x="137" y="178" fill="#ffff00" font-family="${SvgRenderer.LYRIC_FONT}" font-size="76" font-weight="bold">${series}</text>
-  <!-- Main Title (106pt -> 150px, bold 標楷體, centered) -->
-  <text x="512" y="390" fill="#ffcc00" font-family="${SvgRenderer.LYRIC_FONT}" font-size="150" font-weight="bold" text-anchor="middle">${title}</text>
-  <!-- English/Secondary Subtitle (48pt -> 68px, bold Times New Roman, centered) -->
-  <text x="512" y="518" fill="#ffcc00" font-family="${SvgRenderer.MUSIC_FONT}" font-size="68" font-weight="bold" text-anchor="middle">${subtitle}</text>
+  <!-- Album Name (54pt -> 76px, bold 標楷體) -->
+  <text x="137" y="178" fill="#ffff00" font-family="${SvgRenderer.LYRIC_FONT}" font-size="76" font-weight="bold">${escapeXml(album)}</text>
+  <!-- Main Title (${titleLayout.lines.length} lines, font-size: ${titleLayout.fontSize}px, bold 標楷體, centered) -->
+  ${titleElements}
+  <!-- English/Secondary Subtitle (${subtitleLayout.lines.length} lines, font-size: ${subtitleLayout.fontSize}px, bold Times New Roman, centered) -->
+  ${subtitleElements}
   <!-- Credits (40pt -> 56px, regular 標楷體, centered) -->
-  <text x="512" y="682" fill="#ffffff" font-family="${SvgRenderer.LYRIC_FONT}" font-size="56" font-weight="normal" text-anchor="middle">${credits}</text>
+  <text x="512" y="682" fill="#ffffff" font-family="${SvgRenderer.LYRIC_FONT}" font-size="56" font-weight="normal" text-anchor="middle">${escapeXml(credits)}</text>
 </svg>`;
   }
+}
+
+export function escapeXml(str: string): string {
+  return str.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&apos;';
+      default: return c;
+    }
+  });
+}
+
+export interface TitleLayout {
+  lines: string[];
+  fontSize: number;
+  lineYCoords: number[];
+  subtitleY: number;
+}
+
+export function measureTitleUnits(text: string): number {
+  let units = 0;
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    if (ch === ' ') {
+      units += 0.3;
+    } else if (code < 128) {
+      units += 0.55;
+    } else {
+      units += 1.0;
+    }
+  }
+  return Math.max(units, 1);
+}
+
+export function splitTitleLines(title?: string, preserveEmpty: boolean = false): string[] {
+  if (!title) return ['標題'];
+  const rawLines = title.split(/\r?\n|\\n/);
+  if (preserveEmpty) {
+    return rawLines.map((l) => l.trim());
+  }
+  const trimmed = rawLines.map((l) => l.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : ['標題'];
+}
+
+export function calculateTitleLayout(
+  title?: string,
+  preserveEmpty: boolean = false
+): TitleLayout {
+  const lines = splitTitleLines(title, preserveEmpty);
+  const availableWidth = 880;
+
+  if (lines.length <= 1) {
+    const single = lines[0] || '標題';
+    const units = measureTitleUnits(single);
+    let fontSize = 150;
+    if (units * 150 > availableWidth) {
+      fontSize = Math.max(75, Math.min(150, Math.floor(availableWidth / units)));
+    }
+    return {
+      lines: [single],
+      fontSize,
+      lineYCoords: [390],
+      subtitleY: 518,
+    };
+  }
+
+  // 2 or more lines
+  const maxUnits = Math.max(...lines.map(measureTitleUnits));
+  let baseSize = 105;
+  if (lines.length > 2) {
+    baseSize = Math.max(50, Math.floor(210 / lines.length));
+  }
+
+  let fontSize = baseSize;
+  if (maxUnits * baseSize > availableWidth) {
+    const minSize = lines.length > 2 ? 45 : 60;
+    fontSize = Math.max(minSize, Math.min(baseSize, Math.floor(availableWidth / maxUnits)));
+  }
+
+  if (lines.length === 2) {
+    return {
+      lines,
+      fontSize,
+      lineYCoords: [305, 425],
+      subtitleY: 545,
+    };
+  }
+
+  // General N lines
+  const lineSpacing = Math.round(fontSize * 1.2);
+  const startY = Math.round(390 - ((lines.length - 1) * lineSpacing) / 2);
+  const lineYCoords = lines.map((_, i) => startY + i * lineSpacing);
+  const subtitleY = Math.max(518, lineYCoords[lines.length - 1] + 80);
+
+  return {
+    lines,
+    fontSize,
+    lineYCoords,
+    subtitleY,
+  };
+}
+
+export interface SubtitleLayout {
+  lines: string[];
+  fontSize: number;
+  lineYCoords: number[];
+}
+
+export function splitSubtitleLines(
+  subtitle?: string,
+  preserveEmpty: boolean = false
+): string[] {
+  if (!subtitle) return ['Title'];
+  const rawLines = subtitle.split(/\r?\n|\\n/);
+  if (preserveEmpty) {
+    return rawLines.map((l) => l.trim());
+  }
+  const trimmed = rawLines.map((l) => l.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : ['Title'];
+}
+
+export function calculateSubtitleLayout(
+  subtitle?: string,
+  isTitleMultiLine: boolean = false,
+  preserveEmpty: boolean = false
+): SubtitleLayout {
+  const lines = splitSubtitleLines(subtitle, preserveEmpty);
+  const availableWidth = 880;
+
+  if (lines.length <= 1) {
+    const single = lines[0] || 'Title';
+    const units = measureTitleUnits(single);
+    let fontSize = 68;
+    if (units * 68 > availableWidth) {
+      fontSize = Math.max(36, Math.min(68, Math.floor(availableWidth / units)));
+    }
+    const baseY = isTitleMultiLine ? 545 : 518;
+    return {
+      lines: [single],
+      fontSize,
+      lineYCoords: [baseY],
+    };
+  }
+
+  // 2 or more lines
+  const maxUnits = Math.max(...lines.map(measureTitleUnits));
+  let fontSize = 48;
+  if (maxUnits * 48 > availableWidth) {
+    fontSize = Math.max(30, Math.min(48, Math.floor(availableWidth / maxUnits)));
+  }
+
+  const startY = isTitleMultiLine ? 525 : 500;
+  const lineSpacing = Math.round(fontSize * 1.18);
+  const lineYCoords = lines.map((_, i) => startY + i * lineSpacing);
+
+  return {
+    lines,
+    fontSize,
+    lineYCoords,
+  };
 }
 
 export function splitAstIntoSlides(sections: { tag: string; lines: OutputLine[] }[]): SheetSlide[] {

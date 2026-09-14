@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { isValidPitchString, normalizePitchString } from '../core/sourceSplicer';
 import { SvgRenderer } from '../core/svgRenderer';
-import { MelodicUnit, NodeElement, Note, SheetSlide } from '../core/types';
+import { MelodicUnit, NodeElement, Note, SheetSlide, SongMetadata } from '../core/types';
 import { InteractiveSlideCanvas, SelectedUnitContext } from './InteractiveSlideCanvas';
+import { InteractiveTitleSlideCanvas } from './InteractiveTitleSlideCanvas';
 
 export interface SlideDeckStatus {
   valid: boolean;
@@ -15,6 +16,8 @@ interface SlideDeckViewProps {
   rawSlides?: SheetSlide[];
   status?: SlideDeckStatus | null;
   melodyText?: string;
+  metadata?: SongMetadata;
+  onUpdateMetadata?: (newMetadata: Partial<SongMetadata>) => void;
   onBreakLine?: (
     targetNode: NodeElement,
     trailingRestNode?: NodeElement | null
@@ -225,11 +228,14 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
   );
 };
 
+
 export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
   slidesSvg,
   rawSlides,
   status,
   melodyText,
+  metadata,
+  onUpdateMetadata,
   onBreakLine,
   onMergeLine,
   onFlowToNext,
@@ -239,14 +245,16 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
 }) => {
   // Aggregate all slides: Slide 1 (Title Card) + Slides 2..N+1 (Notation Slides)
   const allSlides = useMemo(() => {
-    if (slidesSvg.length === 0) return [];
+    const titleSvg = SvgRenderer.renderTitleSlideSvg(metadata);
+    const titleCard = {
+      slideNumber: 1,
+      sectionTag: '封面',
+      sectionName: '封面',
+      svg: titleSvg,
+    };
+    if (slidesSvg.length === 0) return [titleCard];
     return [
-      {
-        slideNumber: 1,
-        sectionTag: '標題',
-        sectionName: '標題',
-        svg: SvgRenderer.renderTitleSlideSvg(),
-      },
+      titleCard,
       ...slidesSvg.map((s, idx) => ({
         slideNumber: idx + 2,
         sectionTag: s.sectionTag,
@@ -254,7 +262,7 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
         svg: s.svg,
       })),
     ];
-  }, [slidesSvg]);
+  }, [slidesSvg, metadata]);
 
   const totalSlides = allSlides.length;
   const [currentSlideIndex, setCurrentSlideIndex] = useState(1);
@@ -671,9 +679,18 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
             )}
           </div>
 
-          {/* Row 2: Note Editing Ribbon / Guidance Bar */}
+          {/* Row 2: Note Editing Ribbon / Guidance Bar / Title Inspector */}
           <div className="min-h-9 px-3 py-1 flex flex-wrap items-center gap-y-1.5 bg-slate-950/40">
-            {!selectedUnit ? (
+            {currentSlideIndex === 0 ? (
+              /* State 0: Title Slide Guidance */
+              <div className="flex items-center gap-1.5 text-xs text-slate-200 font-medium select-text cursor-text">
+                <span className="text-amber-400 font-bold text-sm select-none">💡</span>
+                <span>點選封面投影片中的文字（歌名、專輯、詞曲）可直接編輯</span>
+                <span className="text-slate-400 text-xs ml-2 select-text">
+                  (快捷鍵：<kbd className="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono text-xs font-semibold select-text">Shift+Enter</kbd> 換行 · <kbd className="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono text-xs font-semibold select-text">Enter</kbd> 確定 · <kbd className="px-1.5 py-0.5 bg-slate-800 text-amber-300 rounded border border-slate-600 font-mono text-xs font-semibold select-text">Esc</kbd> 取消)
+                </span>
+              </div>
+            ) : !selectedUnit ? (
               /* State A: Idle Guidance */
               <div className="flex items-center gap-1.5 text-xs text-slate-200 font-medium select-text cursor-text">
                 <span className="text-amber-400 font-bold text-sm select-none">💡</span>
@@ -729,9 +746,9 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
             className="relative bg-black rounded-xl overflow-hidden shadow-2xl shadow-black/90 border-2 border-slate-500 flex items-center justify-center transition"
           >
             {currentSlideIndex === 0 ? (
-              <div
-                className="w-full h-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:block pointer-events-none"
-                dangerouslySetInnerHTML={{ __html: currentSlide?.svg ?? '' }}
+              <InteractiveTitleSlideCanvas
+                metadata={metadata}
+                onUpdateMetadata={onUpdateMetadata}
               />
             ) : !rawSlides || !rawSlides[currentSlideIndex - 1] ? (
               <div

@@ -1,5 +1,5 @@
 import { KeySignature, parseClassicSong, parsePitch, parseTime } from './parserClassic';
-import { MelodicUnit, NodeElement, Note, SourceSpan } from './types';
+import { MelodicUnit, NodeElement, Note, SongMetadata, SourceSpan } from './types';
 import {
   formatSingleNoteToken,
   decomposeNoteAcrossBars,
@@ -1390,3 +1390,80 @@ export function performSynchronizedFlowToPrev(
   const newLyrics = spliceLyricLineBreak(mergedLyrics, adjustedSpan);
   return { lyricsText: newLyrics, melodyText };
 }
+
+/**
+ * Surgically updates or inserts title slide metadata directives (<title>, <subtitle>, <album>, <credits>)
+ * into lyricsText while preserving formatting and subsequent lines.
+ */
+export function updateLyricsMetadata(
+  lyricsText: string,
+  newMetadata: Partial<SongMetadata>
+): string {
+  const isCrlf = lyricsText.includes('\r\n');
+  const eol = isCrlf ? '\r\n' : '\n';
+  const lines = lyricsText.split(/\r?\n/);
+
+  // Field to directive name mapping in standard order
+  const fields: { key: keyof SongMetadata; tag: string }[] = [
+    { key: 'title', tag: 'title' },
+    { key: 'subtitle', tag: 'subtitle' },
+    { key: 'album', tag: 'album' },
+    { key: 'credits', tag: 'credits' },
+  ];
+
+  // Map existing directive locations in lines
+  const directiveIndices = new Map<keyof SongMetadata, number>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    const match = trimmed.match(/^<(title|subtitle|album|credits)>(.*)$/i);
+    if (match) {
+      const tag = match[1].toLowerCase();
+      if (tag === 'title' && !directiveIndices.has('title')) directiveIndices.set('title', i);
+      else if (tag === 'subtitle' && !directiveIndices.has('subtitle')) directiveIndices.set('subtitle', i);
+      else if (tag === 'album' && !directiveIndices.has('album')) directiveIndices.set('album', i);
+      else if (tag === 'credits' && !directiveIndices.has('credits')) {
+        directiveIndices.set('credits', i);
+      }
+    }
+  }
+
+  const resultLines = [...lines];
+
+  for (const { key, tag } of fields) {
+    if (newMetadata[key] === undefined) continue;
+
+    let val = newMetadata[key]?.trim() ?? '';
+    if (key === 'title' || key === 'subtitle') {
+      val = val.replace(/\r?\n/g, '\\n');
+    }
+    const existingIdx = directiveIndices.get(key);
+
+    if (existingIdx !== undefined) {
+      if (val) {
+        resultLines[existingIdx] = `<${tag}> ${val}`;
+      } else {
+        resultLines.splice(existingIdx, 1);
+        for (const [k, idx] of directiveIndices.entries()) {
+          if (idx > existingIdx) directiveIndices.set(k, idx - 1);
+        }
+        directiveIndices.delete(key);
+      }
+    } else if (val) {
+      let highestExisting = -1;
+      for (const idx of directiveIndices.values()) {
+        if (idx > highestExisting) highestExisting = idx;
+      }
+      const insertIdx = highestExisting >= 0 ? highestExisting + 1 : 0;
+
+      resultLines.splice(insertIdx, 0, `<${tag}> ${val}`);
+      for (const [k, idx] of directiveIndices.entries()) {
+        if (idx >= insertIdx) directiveIndices.set(k, idx + 1);
+      }
+      directiveIndices.set(key, insertIdx);
+    }
+  }
+
+  return resultLines.join(eol);
+}
+

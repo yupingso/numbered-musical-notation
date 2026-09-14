@@ -9,6 +9,7 @@ import {
   OutputLine,
   Section,
   SongAST,
+  SongMetadata,
   SourceSpan,
   UnitSegment,
 } from './types';
@@ -907,6 +908,7 @@ export class ClassicSongParser {
 
 export function parseClassicSong(melodyText: string, lyricsText: string): SongAST {
   const parser = new ClassicSongParser();
+  const metadata: SongMetadata = {};
 
   let time: ParsedTime | null = null;
   let s = '';
@@ -944,6 +946,16 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
       parser.slurStartsAtLeadingNote = Boolean(parseInt(line.slice(29).trim(), 10));
     } else if (line.startsWith('<group_8th_notes>')) {
       parser.group8thNotes = Boolean(parseInt(line.slice(17).trim(), 10));
+    } else if (/^<(?:title|subtitle|album|credits)>/i.test(line)) {
+      const metaMatch = line.match(/^<(title|subtitle|album|credits)>(.*)$/i);
+      if (metaMatch) {
+        const field = metaMatch[1].toLowerCase();
+        const val = metaMatch[2].trim();
+        if (field === 'title') metadata.title = val;
+        else if (field === 'subtitle') metadata.subtitle = val;
+        else if (field === 'album') metadata.album = val;
+        else if (field === 'credits') metadata.credits = val;
+      }
     } else {
       for (let c = 0; c < line.length; c++) {
         const ch = line[c];
@@ -973,6 +985,19 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
     lyricOffset += rawLine.length + nlLen;
 
     const line = trimmed;
+    if (/^<(?:title|subtitle|album|credits)>/i.test(line)) {
+      const metaMatch = line.match(/^<(title|subtitle|album|credits)>(.*)$/i);
+      if (metaMatch) {
+        const field = metaMatch[1].toLowerCase();
+        const val = metaMatch[2].trim();
+        if (field === 'title') metadata.title = val;
+        else if (field === 'subtitle') metadata.subtitle = val;
+        else if (field === 'album') metadata.album = val;
+        else if (field === 'credits') metadata.credits = val;
+      }
+      continue;
+    }
+
     let cleaned = '';
     const lineSpans: SourceSpan[] = [];
     let c = 0;
@@ -1016,6 +1041,48 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
     key: keyDisplay,
     time: firstTime,
     sections,
+    metadata,
     errors: parser.errors.length > 0 ? parser.errors : undefined,
   };
 }
+
+export function parseSongMetadata(lyricsText: string, melodyText: string = ''): SongMetadata {
+  const metadata: SongMetadata = {};
+
+  // Check melody text first as fallback
+  const mLines = melodyText.split(/\r?\n/);
+  for (const raw of mLines) {
+    const line = raw.trim();
+    if (/^<(?:title|subtitle|album|credits)>/i.test(line)) {
+      const match = line.match(/^<(title|subtitle|album|credits)>(.*)$/i);
+      if (match) {
+        const field = match[1].toLowerCase();
+        const val = match[2].trim();
+        if (field === 'title') metadata.title = val;
+        else if (field === 'subtitle') metadata.subtitle = val;
+        else if (field === 'album') metadata.album = val;
+        else if (field === 'credits') metadata.credits = val;
+      }
+    }
+  }
+
+  // Lyrics text takes precedence
+  const lLines = lyricsText.split(/\r?\n/);
+  for (const raw of lLines) {
+    const line = raw.trim();
+    if (/^<(?:title|subtitle|album|credits)>/i.test(line)) {
+      const match = line.match(/^<(title|subtitle|album|credits)>(.*)$/i);
+      if (match) {
+        const field = match[1].toLowerCase();
+        const val = match[2].trim();
+        if (field === 'title') metadata.title = val;
+        else if (field === 'subtitle') metadata.subtitle = val;
+        else if (field === 'album') metadata.album = val;
+        else if (field === 'credits') metadata.credits = val;
+      }
+    }
+  }
+
+  return metadata;
+}
+
