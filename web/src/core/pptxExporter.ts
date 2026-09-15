@@ -63,7 +63,7 @@ export function updateSlide1Xml(slide1Xml: string, metadata?: SongMetadata): str
     const subLines = splitSubtitleLines(metadata.subtitle);
     const isTitleMultiLine = splitTitleLines(metadata.title).length > 1;
     const subLayout = calculateSubtitleLayout(metadata.subtitle, isTitleMultiLine);
-    const sz = Math.round((subLayout.fontSize * 4800) / 48);
+    const sz = Math.round((subLayout.fontSize * 4800) / 68);
 
     const paragraphsXml = subLines
       .map(

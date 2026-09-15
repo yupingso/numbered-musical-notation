@@ -86,6 +86,8 @@ describe('pptxExporter with template.pptx', () => {
     expect(slide1Xml).toContain('Unshakeable Faith');
     expect(slide1Xml).toContain('讚美之泉 22');
     expect(slide1Xml).toContain('詞：游智婷 / 曲：曾祥怡');
+    // A single-line subtitle must keep the template's 48pt size.
+    expect(slide1Xml).toContain('sz="4800"');
   });
 
   it('updates Slide 1 with 2-line title in exported PPTX', async () => {
@@ -123,6 +125,6 @@ describe('pptxExporter with template.pptx', () => {
     expect(slide1Xml).toContain('一生一世');
     expect(slide1Xml).toContain('All the Days of My Life');
     expect(slide1Xml).toContain('In the House of the Lord');
-    expect(slide1Xml).toContain('sz="4800"');
+    expect(slide1Xml).toContain('sz="3388"');
   });
 });
