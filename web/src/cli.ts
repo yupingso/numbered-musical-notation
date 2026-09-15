@@ -139,10 +139,16 @@ async function main() {
     console.log('done.');
   }
 
+  process.stdout.write('Rendering title slide... ');
+  const titleSvg = SvgRenderer.renderTitleSlideSvg(ast.metadata);
+  const titlePng = rasterizeSvgToPngBuffer(titleSvg, 2048);
+  console.log('done.');
+
   console.log('Assembling PPTX presentation with JSZip...');
   const pptxBytes = await appendSlidesToPptx({
     templateData,
     slidePngImages: pngImages,
+    titlePngImage: titlePng,
   });
 
   const outDir = path.dirname(outputPath);

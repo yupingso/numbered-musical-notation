@@ -186,6 +186,11 @@ export const App: React.FC = () => {
       }
       const templateBuffer = await templateRes.arrayBuffer();
 
+      // The title card goes through the same renderer and rasterizer as the
+      // notation slides, so the export is a pixel-exact copy of the preview.
+      const titleSvg = SvgRenderer.renderTitleSlideSvg(metadata);
+      const titlePng = await rasterizeSvgInBrowser(titleSvg, 2048, 1536);
+
       const pngImages: Uint8Array[] = [];
       for (const s of slidesSvg) {
         const png = await rasterizeSvgInBrowser(s.svg, 2048, 1536);
@@ -195,7 +200,7 @@ export const App: React.FC = () => {
       const pptxBytes = await appendSlidesToPptx({
         templateData: templateBuffer,
         slidePngImages: pngImages,
-        metadata,
+        titlePngImage: titlePng,
       });
 
       const blob = new Blob([pptxBytes.buffer as ArrayBuffer], {
