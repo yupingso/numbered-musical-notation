@@ -3,3 +3,4 @@ dist/
 public/fonts/
 .DS_Store
 *.local
+.vite/
