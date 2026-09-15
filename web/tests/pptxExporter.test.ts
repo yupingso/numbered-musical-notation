@@ -125,6 +125,65 @@ describe('pptxExporter with template.pptx', () => {
     expect(slide1Xml).toContain('一生一世');
     expect(slide1Xml).toContain('All the Days of My Life');
     expect(slide1Xml).toContain('In the House of the Lord');
+    // A 2-line subtitle scales down to 48px on the design canvas, which is
+    // 48 * (4800/68) = 3388 hundredths of a point.
     expect(slide1Xml).toContain('sz="3388"');
+  });
+
+  it('matches template.pptx font sizes when metadata uses default sizing', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '標題',
+        subtitle: 'Title',
+        album: '讚美之泉 22',
+        credits: '詞： / 曲：',
+      },
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+
+    // The design canvas is 1024px over 10in, so 1px = 0.703125pt. Each of
+    // these must reproduce the hand-authored card in template.pptx.
+    expect(slide1Xml).toContain('sz="5400"'); // album,    76px -> 54pt
+    expect(slide1Xml).toContain('sz="10600"'); // title,   150px -> 106pt
+    expect(slide1Xml).toContain('sz="4800"'); // subtitle, 68px -> 48pt
+    expect(slide1Xml).toContain('sz="4000"'); // credits,  56px -> 40pt
+  });
+
+  it('preserves the slide number placeholder field on Slide 1', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: { title: '標題' },
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+    // tools/ppt-overlay relies on this field to restore slide numbers.
+    expect(slide1Xml).toContain('type="slidenum"');
+  });
+
+  it('renders a valid title card even when no metadata is supplied', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outPptxUint8Array = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+    });
+
+    const zip = await JSZip.loadAsync(outPptxUint8Array);
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1Xml).toContain('標題');
+    expect(slide1Xml).toContain('專輯');
+    expect(slide1Xml).toContain('詞： / 曲：');
+    // Shapes must stay balanced so PowerPoint does not flag the file.
+    const opens = (slide1Xml.match(/<p:sp>/g) || []).length;
+    const closes = (slide1Xml.match(/<\/p:sp>/g) || []).length;
+    expect(opens).toBe(5);
+    expect(closes).toBe(5);
   });
 });
