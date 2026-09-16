@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { isValidPitchString, normalizePitchString } from '../core/sourceSplicer';
 import { SvgRenderer } from '../core/svgRenderer';
-import { MelodicUnit, NodeElement, Note, SheetSlide, SongMetadata } from '../core/types';
-import { InteractiveSlideCanvas, SelectedUnitContext } from './InteractiveSlideCanvas';
+import { MelodicUnit, NodeElement, Note, SheetSlide, SongMetadata, SourceSpan } from '../core/types';
+import { InteractiveSlideCanvas, SelectedUnitContext, buildUnitContext } from './InteractiveSlideCanvas';
 import { InteractiveTitleSlideCanvas } from './InteractiveTitleSlideCanvas';
 
 export interface SlideDeckStatus {
@@ -25,12 +25,14 @@ interface SlideDeckViewProps {
   onMergeLine?: (lineEndNode: NodeElement) => void;
   onFlowToNext?: (prevNode: NodeElement, lineEndNode: NodeElement) => void;
   onFlowToPrev?: (upToNode: NodeElement, prevLineEndNode: NodeElement) => void;
-  onEditLyric?: (node: NodeElement, newChar: string) => void;
+  onEditLyric?: (target: NodeElement | SourceSpan, newChar: string) => void;
   onEditMelody?: (
     target: MelodicUnit | NodeElement,
     newDuration?: number,
     newPitch?: string
   ) => void;
+  onExpandGroup?: (unit: MelodicUnit) => void;
+  onBreakGroup?: (unit: MelodicUnit) => void;
 }
 
 interface NoteInspectorBarProps {
@@ -40,7 +42,9 @@ interface NoteInspectorBarProps {
     newDuration?: number,
     newPitch?: string
   ) => void;
-  onEditLyric?: (node: NodeElement, newChar: string) => void;
+  onEditLyric?: (target: NodeElement | SourceSpan, newChar: string) => void;
+  onExpandGroup?: (unit: MelodicUnit) => void;
+  onBreakGroup?: (unit: MelodicUnit) => void;
   onClose: () => void;
 }
 
@@ -48,6 +52,8 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
   selectedUnit,
   onEditMelody,
   onEditLyric,
+  onExpandGroup,
+  onBreakGroup,
   onClose,
 }) => {
   const [editPitchVal, setEditPitchVal] = useState(selectedUnit.initialPitch);
@@ -57,8 +63,9 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
   // Unit inspector validation and commit logic
   const isPitchValid = isValidPitchString(editPitchVal.trim());
   const lyricCodePoints = [...editLyricVal.trim()];
+  const hasGroupLyric = Boolean(selectedUnit.initialLyric || selectedUnit.targetNode.text);
   const isLyricValid =
-    (!selectedUnit.targetNode.text && editLyricVal.trim() === '') ||
+    (!hasGroupLyric && editLyricVal.trim() === '') ||
     (lyricCodePoints.length === 1 &&
       !' ,.!?　。，、！？\r\n~'.includes(editLyricVal.trim()));
   const canCommit = isPitchValid && isLyricValid;
@@ -88,8 +95,9 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
       );
     }
 
-    if (lVal && onEditLyric && targetNode.text && lVal !== selectedUnit.initialLyric) {
-      onEditLyric(targetNode, lVal);
+    const lyricTarget = selectedUnit.groupLyricSpan || targetNode;
+    if (lVal && onEditLyric && hasGroupLyric && lVal !== selectedUnit.initialLyric) {
+      onEditLyric(lyricTarget, lVal);
     }
 
     onClose();
@@ -99,6 +107,7 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
     editPitchVal,
     editLyricVal,
     editDurationVal,
+    hasGroupLyric,
     onEditMelody,
     onEditLyric,
     onClose,
@@ -123,19 +132,21 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canCommit, commitEdit, onClose]);
 
+  const isMultiUnitGroup = (selectedUnit.slurCount ?? 1) >= 2;
+
   return (
-    <div className="flex flex-wrap items-center justify-between w-full min-w-0 gap-2">
-      {/* Left: Note Properties (Pitch, Duration, Lyric) */}
-      <div className="flex items-center gap-2 shrink-0">
+    <div className="flex flex-nowrap items-center justify-between w-full min-w-0 gap-2">
+      {/* Left: Note Properties (Pitch, Duration, Lyric & Group Slur Actions) */}
+      <div className="flex flex-nowrap items-center gap-2 shrink-0">
         {/* Pitch */}
-        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none">
+        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none shrink-0">
           <span className="text-xs font-bold text-slate-300">音高</span>
           <input
             type="text"
             value={editPitchVal}
             placeholder="-"
             onChange={(e) => setEditPitchVal(normalizePitchString(e.target.value))}
-            className={`w-10 h-6 px-1 text-center font-bold text-xs rounded border transition focus:outline-none ${
+            className={`w-9 h-6 px-1 text-center font-bold text-xs rounded border transition focus:outline-none ${
               !isPitchValid
                 ? 'bg-rose-950/80 text-rose-200 border-rose-500 ring-1 ring-rose-500'
                 : 'bg-black text-amber-300 border-amber-500/70 focus:border-amber-400'
@@ -145,12 +156,12 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
         </label>
 
         {/* Duration */}
-        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none">
+        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none shrink-0">
           <span className="text-xs font-bold text-slate-300">時值</span>
           <select
             value={editDurationVal}
             onChange={(e) => setEditDurationVal(e.target.value)}
-            className="h-6 pl-1.5 pr-5 py-0 font-bold text-xs rounded border transition focus:outline-none cursor-pointer bg-black text-amber-300 border-amber-500/70 focus:border-amber-400"
+            className="h-6 pl-1.5 pr-4 py-0 font-bold text-xs rounded border transition focus:outline-none cursor-pointer bg-black text-amber-300 border-amber-500/70 focus:border-amber-400"
             title="簡譜音符時值（拍數）"
           >
             {!['4', '3', '2', '1.5', '1', '0.75', '0.5', '0.25'].includes(
@@ -172,14 +183,14 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
         </label>
 
         {/* Lyric */}
-        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none">
+        <label className="flex items-center gap-1 text-xs font-semibold text-slate-200 select-none shrink-0">
           <span className="text-xs font-bold text-slate-300">歌詞</span>
           <input
             type="text"
             value={editLyricVal}
             placeholder="-"
             onChange={(e) => setEditLyricVal(e.target.value)}
-            className={`w-9 h-6 px-1 text-center font-bold text-xs rounded border transition focus:outline-none ${
+            className={`w-8 h-6 px-1 text-center font-bold text-xs rounded border transition focus:outline-none ${
               !isLyricValid
                 ? 'bg-rose-950/80 text-rose-200 border-rose-500 ring-1 ring-rose-500'
                 : 'bg-black text-white border-sky-500/70 focus:border-sky-400'
@@ -189,10 +200,37 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
                 ? lyricCodePoints.length > 1
                   ? '歌詞僅限單一字'
                   : '歌詞不能為空'
+                : isMultiUnitGroup
+                ? `此連音群組共用歌詞「${editLyricVal}」`
                 : '歌詞單字'
             }
           />
         </label>
+
+        {/* Group Slur Controls */}
+        {selectedUnit.canExpandGroup && (
+          <button
+            type="button"
+            onClick={() => selectedUnit.unit && onExpandGroup?.(selectedUnit.unit)}
+            className="h-6 px-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 font-bold text-xs rounded border border-indigo-400/50 hover:border-indigo-400/80 transition cursor-pointer shadow-sm shrink-0 flex items-center gap-1"
+            title="將此歌詞延伸連音至下一個單音 (~)"
+          >
+            <span>🔗</span>
+            <span>連音</span>
+          </button>
+        )}
+
+        {selectedUnit.canBreakGroup && (
+          <button
+            type="button"
+            onClick={() => selectedUnit.unit && onBreakGroup?.(selectedUnit.unit)}
+            className="h-6 px-1.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 font-bold text-xs rounded border border-rose-400/50 hover:border-rose-400/80 transition cursor-pointer shadow-sm shrink-0 flex items-center gap-1"
+            title="解除此歌詞的所有連音 (~)，拆分為獨立單音"
+          >
+            <span>✂️</span>
+            <span>解連音</span>
+          </button>
+        )}
       </div>
 
       {/* Right: Actions (Commit / Cancel) */}
@@ -242,6 +280,8 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
   onFlowToPrev,
   onEditLyric,
   onEditMelody,
+  onExpandGroup,
+  onBreakGroup,
 }) => {
   // Aggregate all slides: Slide 1 (Title Card) + Slides 2..N+1 (Notation Slides)
   const allSlides = useMemo(() => {
@@ -279,6 +319,46 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
   useEffect(() => {
     setSelectedUnit(null);
   }, [currentSlideIndex]);
+
+  // Refresh selectedUnit context when rawSlides or melodyText changes so group controls stay live
+  useEffect(() => {
+    setSelectedUnit((prev) => {
+      if (!prev || !rawSlides || currentSlideIndex === 0) return prev;
+      const rawIdx = currentSlideIndex - 1;
+      const slide = rawSlides[rawIdx];
+      if (!slide) return null;
+      const prevSlide = rawIdx > 0 ? rawSlides[rawIdx - 1] : null;
+      const nextSlide = rawIdx + 1 < rawSlides.length ? rawSlides[rawIdx + 1] : null;
+
+      let targetLineIdx = prev.lineIdx;
+      let targetNodeIdx = prev.nodeIdx;
+      const targetStart = prev.targetNode?.melodySpan?.start;
+      if (targetStart !== undefined) {
+        const idx1 = slide.line1.nodes.findIndex((n) => n.melodySpan?.start === targetStart);
+        if (idx1 >= 0) {
+          targetLineIdx = 0;
+          targetNodeIdx = idx1;
+        } else if (slide.line2) {
+          const idx2 = slide.line2.nodes.findIndex((n) => n.melodySpan?.start === targetStart);
+          if (idx2 >= 0) {
+            targetLineIdx = 1;
+            targetNodeIdx = idx2;
+          }
+        }
+      }
+
+      return buildUnitContext(
+        targetLineIdx,
+        targetNodeIdx,
+        slide,
+        prevSlide,
+        nextSlide,
+        undefined,
+        prev.trailingRestNode,
+        melodyText
+      );
+    });
+  }, [rawSlides, melodyText, currentSlideIndex]);
 
   // Disable / dismiss unit focus when clicking outside inspector and outside unit nodes
   useEffect(() => {
@@ -542,8 +622,8 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
             className="bg-slate-900 border border-slate-700/90 rounded-xl overflow-hidden shadow-md z-20 flex flex-col select-none"
           >
             {/* Row 1: Slide Navigation & Section Context */}
-            <div className="min-h-9 px-3 py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-slate-800/80">
-            <div className="flex items-center gap-2">
+            <div className="h-9 px-3 flex flex-nowrap items-center justify-between gap-x-3 border-b border-slate-800/80 overflow-x-auto shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 rounded-lg p-0.5 shadow-sm">
                 {/* First Slide */}
                 <button
@@ -680,7 +760,7 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
           </div>
 
           {/* Row 2: Note Editing Ribbon / Guidance Bar / Title Inspector */}
-          <div className="min-h-9 px-3 py-1 flex flex-wrap items-center gap-y-1.5 bg-slate-950/40">
+          <div className="h-9 px-3 flex flex-nowrap items-center bg-slate-950/40 overflow-x-auto shrink-0">
             {currentSlideIndex === 0 ? (
               /* State 0: Title Slide Guidance */
               <div className="flex items-center gap-1.5 text-xs text-slate-200 font-medium select-text cursor-text">
@@ -702,10 +782,12 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
             ) : (
               /* State B: Note Inspector Active */
               <NoteInspectorBar
-                key={`inspector-${selectedUnit.lineIdx}-${selectedUnit.nodeIdx}-${selectedUnit.targetNode.melodySpan?.start ?? ''}`}
+                key={`inspector-${selectedUnit.lineIdx}-${selectedUnit.nodeIdx}-${selectedUnit.targetNode.melodySpan?.start ?? ''}-${selectedUnit.slurCount ?? 1}-${selectedUnit.initialLyric}`}
                 selectedUnit={selectedUnit}
                 onEditMelody={onEditMelody}
                 onEditLyric={onEditLyric}
+                onExpandGroup={onExpandGroup}
+                onBreakGroup={onBreakGroup}
                 onClose={() => setSelectedUnit(null)}
               />
             )}

@@ -121,6 +121,13 @@ export interface MelodicUnit {
   lyricSpan?: SourceSpan;
   slurToNext?: boolean;
   slurFromPrev?: boolean;
+  slurRootLyric?: string;
+  slurRootLyricSpan?: SourceSpan;
+  slurRootUnitId?: string;
+  slurGroupUnitIds?: string[];
+  slurIndex?: number;
+  slurCount?: number;
+  slurSpans?: SourceSpan[];
   segments: UnitSegment[];
   melodySpan: SourceSpan;
 }

@@ -693,6 +693,10 @@ export class ClassicSongParser {
               } else if (lyricChar === '~') {
                 newUnit.slurFromPrev = true;
                 if (currentUnit) currentUnit.slurToNext = true;
+                if (lyricSpan) {
+                  node.lyricSpan = { ...lyricSpan };
+                  newUnit.lyricSpan = { ...lyricSpan };
+                }
               } else {
                 node.text = lyricChar;
                 if (lyricSpan) {
@@ -738,6 +742,57 @@ export class ClassicSongParser {
 
     if (totalNotesToMatchLyrics !== numWords) {
       this.errors.push(`${totalNotesToMatchLyrics} notes != ${numWords} words`);
+    }
+
+    for (const section of sections) {
+      for (const line of section.lines) {
+        let i = 0;
+        while (i < line.units.length) {
+          const u = line.units[i];
+          if (u.pitch.isRest) {
+            i++;
+            continue;
+          }
+          const group: MelodicUnit[] = [u];
+          let j = i + 1;
+          while (j < line.units.length) {
+            const nextU = line.units[j];
+            if (nextU.pitch.isRest) {
+              break;
+            }
+            if (nextU.slurFromPrev || group[group.length - 1].slurToNext) {
+              group.push(nextU);
+              j++;
+            } else {
+              break;
+            }
+          }
+
+          const rootUnit = group[0];
+          const rootLyric = rootUnit.lyric;
+          const rootLyricSpan = rootUnit.lyricSpan ? { ...rootUnit.lyricSpan } : undefined;
+          const groupUnitIds = group.map((gu) => gu.id);
+          const slurSpans: SourceSpan[] = [];
+          for (let k = 1; k < group.length; k++) {
+            if (group[k].lyricSpan) {
+              slurSpans.push({ ...group[k].lyricSpan! });
+            }
+          }
+
+          for (let k = 0; k < group.length; k++) {
+            const member = group[k];
+            member.slurRootUnitId = rootUnit.id;
+            member.slurRootLyric = rootLyric;
+            member.slurRootLyricSpan = rootLyricSpan ? { ...rootLyricSpan } : undefined;
+            member.slurGroupUnitIds = groupUnitIds;
+            member.slurIndex = k + 1;
+            member.slurCount = group.length;
+            member.slurSpans = slurSpans.map((s) => ({ ...s }));
+          }
+
+          i = j;
+        }
+      }
     }
 
     return sections;

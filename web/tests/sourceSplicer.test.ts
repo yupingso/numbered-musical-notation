@@ -833,6 +833,193 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
       );
     });
   });
+
+  describe('Lyric Slur Group Splicing & Context (Item 3)', () => {
+    it('tracks slur group metadata (slurRootLyric, slurCount, slurIndex, slurSpans) across multi-unit slurs', () => {
+      const melody = `<time> 4/4\n| 1 2 3 5 |`;
+      const lyrics = `<tag> 主歌\n你 救~ 恩`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      expect(ast.errors).toBeUndefined();
+      const units = ast.sections[0].lines[0].units;
+      expect(units).toHaveLength(4);
+
+      // Unit 0: "你" (single-unit group)
+      expect(units[0].lyric).toBe('你');
+      expect(units[0].slurRootLyric).toBe('你');
+      expect(units[0].slurCount).toBe(1);
+      expect(units[0].slurIndex).toBe(1);
+      expect(units[0].slurSpans).toEqual([]);
+
+      // Unit 1: "救" (1/2 of "救~")
+      expect(units[1].lyric).toBe('救');
+      expect(units[1].slurRootLyric).toBe('救');
+      expect(units[1].slurCount).toBe(2);
+      expect(units[1].slurIndex).toBe(1);
+      expect(units[1].slurSpans).toHaveLength(1);
+
+      // Unit 2: "~" (2/2 of "救~")
+      expect(units[2].lyric).toBeUndefined();
+      expect(units[2].slurRootLyric).toBe('救');
+      expect(units[2].slurCount).toBe(2);
+      expect(units[2].slurIndex).toBe(2);
+      expect(units[2].slurRootLyricSpan).toEqual(units[1].lyricSpan);
+      expect(units[2].slurSpans).toEqual(units[1].slurSpans);
+
+      // Unit 3: "恩" (single-unit group)
+      expect(units[3].lyric).toBe('恩');
+      expect(units[3].slurCount).toBe(1);
+    });
+
+    it('surgically expands and breaks lyric groups with spliceExpandLyricGroup and spliceBreakLyricGroup', async () => {
+      const { spliceExpandLyricGroup, spliceBreakLyricGroup } = await import('../src/core/sourceSplicer');
+
+      const melody = `<time> 4/4\n| 1 2 3 5 |`;
+      const initialLyrics = `<tag> 主歌\n你 看 救，恩`;
+      const ast1 = parseClassicSong(melody, initialLyrics);
+      const unitJiu = ast1.sections[0].lines[0].units[2]; // "救"
+
+      // Expand "救" once -> "救~，恩"
+      const expanded1 = spliceExpandLyricGroup(
+        initialLyrics,
+        unitJiu.slurRootLyricSpan!,
+        unitJiu.slurSpans
+      );
+      expect(expanded1).toBe(`<tag> 主歌\n你 看 救~，恩`);
+
+      // Parse again and expand from 2nd unit of "救~" -> "救~~，恩"
+      const ast2 = parseClassicSong(melody, expanded1);
+      const unitJiu2nd = ast2.sections[0].lines[0].units[3]; // 2nd unit of group
+      expect(unitJiu2nd.slurRootLyric).toBe('救');
+      expect(unitJiu2nd.slurCount).toBe(2);
+
+      const expanded2 = spliceExpandLyricGroup(
+        expanded1,
+        unitJiu2nd.slurRootLyricSpan!,
+        unitJiu2nd.slurSpans
+      );
+      expect(expanded2).toBe(`<tag> 主歌\n你 看 救~~，恩`);
+
+      // Break entire 3-unit group from any unit -> back to "你 看 救，恩"
+      const ast3 = parseClassicSong(`<time> 4/4\n| 1 2 3 5 6 |`, expanded2);
+      const unitIn3Group = ast3.sections[0].lines[0].units[3];
+      expect(unitIn3Group.slurCount).toBe(3);
+
+      const broken = spliceBreakLyricGroup(expanded2, unitIn3Group.slurSpans!);
+      expect(broken).toBe(initialLyrics);
+
+      // Verify horizontal whitespace (spaces, tabs, full-width spaces) collapses cleanly around standalone ~ tokens
+      const spacedLyrics = `<tag> 主歌\n主  ~   ~  愛\n我\u3000~\u3000心`;
+      const astSpaced = parseClassicSong(
+        `<time> 4/4\n| 1 2 3 4 | 5 6 7 - |`,
+        spacedLyrics
+      );
+      const uZhu = astSpaced.sections[0].lines[0].units[0];
+      const uWo = astSpaced.sections[0].lines[1].units[0];
+
+      let cleaned = spliceBreakLyricGroup(spacedLyrics, uWo.slurSpans!);
+      cleaned = spliceBreakLyricGroup(cleaned, uZhu.slurSpans!);
+      expect(cleaned).toBe(`<tag> 主歌\n主 愛\n我\u3000心`);
+      expect(spliceBreakLyricGroup('你\t~\t恩', [{ start: 2, end: 3 }])).toBe('你\t恩');
+    });
+
+    it('enforces group UI rules in buildUnitContext (single-unit neighbor & no rest in between)', async () => {
+      const { buildUnitContext } = await import('../src/components/InteractiveSlideCanvas');
+      const { splitAstIntoSlides } = await import('../src/core/svgRenderer');
+
+      // Line: Unit 0 ("你"), Unit 1 ("看"), Unit 2 ("救"), Unit 3 ("~"), Unit 4 (rest "0"), Unit 5 ("恩")
+      const melody = `<time> 4/4\n| 1 2 3 5 | 0 6 - - |`;
+      const lyrics = `<tag> 主歌\n你 看 救~ 恩`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      const slides = splitAstIntoSlides(ast.sections);
+      const slide = slides[0];
+
+      // 1. Focus Unit 0 ("你"): next group is Unit 1 ("看", single unit) -> canExpandGroup = true, canBreakGroup = false
+      const ctx0 = buildUnitContext(0, 0, slide);
+      expect(ctx0?.canExpandGroup).toBe(true);
+      expect(ctx0?.canBreakGroup).toBe(false);
+
+      // 2. Focus Unit 1 ("看"): next group is "救~" (2-unit group!) -> canExpandGroup = false
+      const ctx1 = buildUnitContext(0, 1, slide);
+      expect(ctx1?.canExpandGroup).toBe(false);
+      expect(ctx1?.canBreakGroup).toBe(false);
+
+      // 3. Focus Unit 2 ("救", 1st unit of 2-unit group):
+      //    Next unit after group is Unit 4 (rest "0"!) -> canExpandGroup = false, canBreakGroup = true
+      const ctx2 = buildUnitContext(0, 2, slide);
+      expect(ctx2?.canExpandGroup).toBe(false);
+      expect(ctx2?.canBreakGroup).toBe(true);
+      expect(ctx2?.initialLyric).toBe('救');
+
+      // 4. Focus Unit 3 ("~", 2nd unit of 2-unit group):
+      //    Same group behavior as Unit 2: initialLyric is "救", canBreakGroup = true, canExpandGroup = false
+      const ctx3 = buildUnitContext(0, 3, slide);
+      expect(ctx3?.canExpandGroup).toBe(false);
+      expect(ctx3?.canBreakGroup).toBe(true);
+      expect(ctx3?.initialLyric).toBe('救');
+      expect(ctx3?.groupLyricSpan).toEqual(ctx2?.groupLyricSpan);
+    });
+
+    it('disallows grouping same-pitch neighbors (ties) and allows grouping across line/slide ends', async () => {
+      const { buildUnitContext } = await import('../src/components/InteractiveSlideCanvas');
+      const { splitAstIntoSlides } = await import('../src/core/svgRenderer');
+      const { spliceExpandLyricGroup } = await import('../src/core/sourceSplicer');
+
+      // Line 1: 1 (你), 1 (看 - same pitch as 你!), 3 (救)
+      // Line 2: 5 (恩 - different pitch from 3!), 5 (典 - same pitch as 恩)
+      const melody = `<time> 4/4\n| 1 1 3 5 | 5 - - - |`;
+      const lyrics = `<tag> 主歌\n你 看 救\n恩 典`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      const slides = splitAstIntoSlides(ast.sections);
+      const slide = slides[0];
+
+      // 1. Unit 0 ("你", pitch 1) followed by Unit 1 ("看", pitch 1): same pitch -> tie, NOT slur -> canExpandGroup = false
+      const ctx0 = buildUnitContext(0, 0, slide);
+      expect(ctx0?.canExpandGroup).toBe(false);
+
+      // 2. Unit 1 ("看", pitch 1) followed by Unit 2 ("救", pitch 3): different pitch -> canExpandGroup = true
+      const ctx1 = buildUnitContext(0, 1, slide);
+      expect(ctx1?.canExpandGroup).toBe(true);
+
+      // 3. Unit 2 ("救", pitch 3, at the END of Line 1) followed by Line 2's first unit ("恩", pitch 5):
+      //    Different pitch across line break -> canExpandGroup = true!
+      const ctx2 = buildUnitContext(0, 2, slide);
+      expect(ctx2?.canExpandGroup).toBe(true);
+
+      // Expanding "救" at the end of Line 1 merges "恩"'s melody unit (pitch 5) into Line 1!
+      const expandedLyrics = spliceExpandLyricGroup(
+        lyrics,
+        ctx2!.groupLyricSpan!,
+        ctx2!.unit?.slurSpans
+      );
+      expect(expandedLyrics).toBe(`<tag> 主歌\n你 看 救~\n恩 典`);
+      const astAfter = parseClassicSong(melody, expandedLyrics);
+      expect(astAfter.sections[0].lines[0].units.length).toBe(4); // 1, 1, 3, 5 all on Line 1 now!
+      expect(astAfter.sections[0].lines[0].units[2].slurCount).toBe(2);
+    });
+
+    it('treats courtesy natural (%1) as same pitch as unmarked natural (1) for canExpandGroup', async () => {
+      const { buildUnitContext } = await import('../src/components/InteractiveSlideCanvas');
+      const { splitAstIntoSlides } = await import('../src/core/svgRenderer');
+
+      const melody = `<time> 4/4\n| 1 %1 2 - |`;
+      const lyrics = `<tag> 主歌\n你 看 救`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      const slides = splitAstIntoSlides(ast.sections);
+      const slide = slides[0];
+
+      // 1 followed by %1 is same pitch -> tie, not slur -> canExpandGroup = false
+      const ctx0 = buildUnitContext(0, 0, slide);
+      expect(ctx0?.canExpandGroup).toBe(false);
+
+      // %1 followed by 2 is different pitch -> canExpandGroup = true
+      const ctx1 = buildUnitContext(0, 1, slide);
+      expect(ctx1?.canExpandGroup).toBe(true);
+    });
+  });
 });
 
 

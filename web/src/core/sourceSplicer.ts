@@ -123,6 +123,64 @@ export function spliceLyricChar(
 }
 
 /**
+ * Surgically expands a lyric unit group by appending a '~' token.
+ * If existingSlurSpans is provided and non-empty, inserts '~' immediately after the last '~'.
+ * Otherwise inserts '~' immediately after rootSpan.
+ */
+export function spliceExpandLyricGroup(
+  lyricsText: string,
+  rootSpan: SourceSpan,
+  existingSlurSpans?: SourceSpan[]
+): string {
+  const insertPos =
+    existingSlurSpans && existingSlurSpans.length > 0
+      ? existingSlurSpans[existingSlurSpans.length - 1].end
+      : rootSpan.end;
+
+  if (insertPos < 0 || insertPos > lyricsText.length) {
+    return lyricsText;
+  }
+
+  return lyricsText.slice(0, insertPos) + '~' + lyricsText.slice(insertPos);
+}
+
+/**
+ * Surgically breaks a multi-unit lyric group into single-unit groups by removing all '~' tokens
+ * belonging to the group (specified by slurSpans).
+ */
+export function spliceBreakLyricGroup(
+  lyricsText: string,
+  slurSpans: SourceSpan[]
+): string {
+  if (!slurSpans || slurSpans.length === 0) {
+    return lyricsText;
+  }
+
+  const sorted = [...slurSpans].sort((a, b) => b.start - a.start);
+  let result = lyricsText;
+
+  for (const span of sorted) {
+    if (span.start < 0 || span.end > result.length || span.start >= span.end) {
+      continue;
+    }
+    const before = result.slice(0, span.start);
+    const after = result.slice(span.end);
+    const wsBeforeMatch = before.match(/[ \t\u3000]+$/);
+    const wsAfterMatch = after.match(/^[ \t\u3000]+/);
+    if (wsBeforeMatch && wsAfterMatch) {
+      result =
+        before.slice(0, before.length - wsBeforeMatch[0].length) +
+        wsBeforeMatch[0][0] +
+        after.slice(wsAfterMatch[0].length);
+    } else {
+      result = before + after;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Surgically toggles a rest between '0' and 'o' (REST_AT_END) in melodyText.
  * If toEnd is true: converts '0' to 'o'.
  * If toEnd is false: converts 'o' to '0'.

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { calculateLineLayout, SvgRenderer } from '../core/svgRenderer';
-import { MelodicUnit, NodeElement, NodeType, Note, OutputLine, SheetSlide } from '../core/types';
+import { MelodicUnit, NodeElement, NodeType, Note, OutputLine, SheetSlide, SourceSpan } from '../core/types';
 
 export interface SelectedUnitContext {
   lineIdx: number;
@@ -10,6 +10,12 @@ export interface SelectedUnitContext {
   initialPitch: string;
   initialLyric: string;
   initialDuration: number;
+  groupLyricSpan?: SourceSpan;
+  slurIndex?: number;
+  slurCount?: number;
+  slurGroupUnitIds?: string[];
+  canExpandGroup: boolean;
+  canBreakGroup: boolean;
   trailingRestNode: NodeElement | null;
   canBreakLine: boolean;
   canFlowToPrev: boolean;
@@ -70,7 +76,67 @@ export function buildUnitContext(
     ? line.units?.find((u) => u.id === targetNode.unitId)
     : undefined;
 
-  const initialLyric = melodicUnit?.lyric || targetNode.text || '';
+  const initialLyric =
+    melodicUnit?.slurRootLyric || melodicUnit?.lyric || targetNode.text || '';
+  const groupLyricSpan =
+    melodicUnit?.slurRootLyricSpan || melodicUnit?.lyricSpan || targetNode.lyricSpan;
+
+  const slurIndex = melodicUnit?.slurIndex ?? 1;
+  const slurCount = melodicUnit?.slurCount ?? 1;
+  const slurGroupUnitIds =
+    melodicUnit?.slurGroupUnitIds ?? (melodicUnit ? [melodicUnit.id] : []);
+
+  let linePrev: OutputLine | null = null;
+  let lineNext: OutputLine | null = null;
+  if (lineIdx === 0) {
+    linePrev =
+      prevSlide && slide.sectionTag === null
+        ? prevSlide.line2 || prevSlide.line1
+        : null;
+    lineNext =
+      slide.line2
+        ? slide.line2
+        : nextSlide && nextSlide.sectionTag === null
+        ? nextSlide.line1
+        : null;
+  } else {
+    linePrev = slide.line1;
+    lineNext =
+      nextSlide && nextSlide.sectionTag === null ? nextSlide.line1 : null;
+  }
+
+  const canBreakGroup = Boolean(
+    melodicUnit &&
+      !melodicUnit.pitch.isRest &&
+      slurCount >= 2 &&
+      melodicUnit.slurSpans &&
+      melodicUnit.slurSpans.length > 0
+  );
+
+  let canExpandGroup = false;
+  if (melodicUnit && !melodicUnit.pitch.isRest && groupLyricSpan && line.units) {
+    const lastGroupUnitId = slurGroupUnitIds[slurGroupUnitIds.length - 1];
+    const lastUnitIdxInLine = line.units.findIndex((u) => u.id === lastGroupUnitId);
+    if (lastUnitIdxInLine >= 0) {
+      const lastGroupUnit = line.units[lastUnitIdxInLine];
+      let nextUnit: MelodicUnit | undefined;
+      if (lastUnitIdxInLine + 1 < line.units.length) {
+        nextUnit = line.units[lastUnitIdxInLine + 1];
+      } else if (lastUnitIdxInLine === line.units.length - 1 && lineNext?.units?.length) {
+        nextUnit = lineNext.units[0];
+      }
+
+      if (nextUnit && !nextUnit.pitch.isRest && (nextUnit.slurCount ?? 1) === 1) {
+        const isSamePitch =
+          lastGroupUnit.pitch.name === nextUnit.pitch.name &&
+          (lastGroupUnit.pitch.accidental ?? 0) === (nextUnit.pitch.accidental ?? 0) &&
+          lastGroupUnit.pitch.octave === nextUnit.pitch.octave;
+        if (!isSamePitch) {
+          canExpandGroup = true;
+        }
+      }
+    }
+  }
 
   const endIdx = lastChildIdx !== undefined ? lastChildIdx : nodeIdx;
   let initialDuration = 1;
@@ -106,25 +172,6 @@ export function buildUnitContext(
   const totalSungUnits = sungUnitsOnLine.length;
   const canBreakLine = currentSungPos > 0;
 
-  let linePrev: OutputLine | null = null;
-  let lineNext: OutputLine | null = null;
-  if (lineIdx === 0) {
-    linePrev =
-      prevSlide && slide.sectionTag === null
-        ? prevSlide.line2 || prevSlide.line1
-        : null;
-    lineNext =
-      slide.line2
-        ? slide.line2
-        : nextSlide && nextSlide.sectionTag === null
-        ? nextSlide.line1
-        : null;
-  } else {
-    linePrev = slide.line1;
-    lineNext =
-      nextSlide && nextSlide.sectionTag === null ? nextSlide.line1 : null;
-  }
-
   const lineEndSungNode =
     totalSungUnits > 0 ? sungUnitsOnLine[totalSungUnits - 1].node : null;
 
@@ -158,6 +205,12 @@ export function buildUnitContext(
     initialPitch,
     initialLyric,
     initialDuration,
+    groupLyricSpan,
+    slurIndex,
+    slurCount,
+    slurGroupUnitIds,
+    canExpandGroup,
+    canBreakGroup,
     trailingRestNode: trailingRestForThisNode ?? null,
     canBreakLine,
     canFlowToPrev,
@@ -222,6 +275,13 @@ export const InteractiveSlideCanvas: React.FC<InteractiveSlideCanvasProps> = ({
           const lineY = lineYCoords[lineIdx];
           const layout = calculateLineLayout(line, contentWidth);
           const nodes = line.nodes;
+
+          const selectedNodeOnLine =
+            selectedUnit?.lineIdx === lineIdx ? line.nodes[selectedUnit.nodeIdx] : null;
+          const selectedUnitObj = selectedNodeOnLine?.unitId
+            ? line.units?.find((u) => u.id === selectedNodeOnLine.unitId)
+            : undefined;
+          const selectedGroupIds = selectedUnitObj?.slurGroupUnitIds ?? [];
 
           return (
             <g
@@ -289,6 +349,11 @@ export const InteractiveSlideCanvas: React.FC<InteractiveSlideCanvasProps> = ({
                 const isSelected =
                   selectedUnit?.lineIdx === lineIdx &&
                   selectedUnit?.nodeIdx === nodeIdx;
+                const isInSelectedGroup =
+                  !isSelected &&
+                  selectedUnit?.lineIdx === lineIdx &&
+                  (selectedUnitObj?.slurCount ?? 1) >= 2 &&
+                  Boolean(node.unitId && selectedGroupIds.includes(node.unitId));
 
                 let restBeforeThisNode: NodeElement | null = null;
                 for (let j = nodeIdx - 1; j >= 0; j--) {
@@ -353,6 +418,8 @@ export const InteractiveSlideCanvas: React.FC<InteractiveSlideCanvasProps> = ({
                       fill={
                         isSelected
                           ? 'rgba(56, 189, 248, 0.20)'
+                          : isInSelectedGroup
+                          ? 'rgba(167, 139, 250, 0.12)'
                           : isHovered
                           ? 'rgba(16, 185, 129, 0.15)'
                           : 'transparent'
@@ -360,6 +427,8 @@ export const InteractiveSlideCanvas: React.FC<InteractiveSlideCanvasProps> = ({
                       stroke={
                         isSelected
                           ? '#38bdf8'
+                          : isInSelectedGroup
+                          ? 'rgba(167, 139, 250, 0.7)'
                           : isHovered
                           ? 'rgba(16, 185, 129, 0.8)'
                           : 'transparent'

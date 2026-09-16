@@ -6,7 +6,7 @@ import { parseClassicSong, parseSongMetadata } from './core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from './core/svgRenderer';
 import { rasterizeSvgInBrowser } from './core/rasterizerWeb';
 import { appendSlidesToPptx } from './core/pptxExporter';
-import { MelodicUnit, NodeElement, SheetSlide, SongMetadata } from './core/types';
+import { MelodicUnit, NodeElement, SheetSlide, SongMetadata, SourceSpan } from './core/types';
 import {
   isValidPitchString,
   modifyMelodicUnitDuration,
@@ -14,6 +14,8 @@ import {
   performSynchronizedFlowToPrev,
   performSynchronizedLineBreak,
   performSynchronizedLineMerge,
+  spliceBreakLyricGroup,
+  spliceExpandLyricGroup,
   spliceLyricChar,
   spliceMelodyNoteDuration,
   spliceMelodyPitch,
@@ -293,10 +295,36 @@ export const App: React.FC = () => {
   );
 
   const handleEditLyric = useCallback(
-    (node: NodeElement, newChar: string) => {
-      if (!node.lyricSpan) return;
+    (target: NodeElement | SourceSpan, newChar: string) => {
+      const span = 'start' in target ? target : target.lyricSpan;
+      if (!span) return;
       recordHistory();
-      const newLyrics = spliceLyricChar(lyricsText, node.lyricSpan, newChar);
+      const newLyrics = spliceLyricChar(lyricsText, span, newChar);
+      setLyricsText(newLyrics);
+    },
+    [lyricsText, recordHistory]
+  );
+
+  const handleExpandGroup = useCallback(
+    (unit: MelodicUnit) => {
+      const rootSpan = unit.slurRootLyricSpan || unit.lyricSpan;
+      if (!rootSpan) return;
+      recordHistory();
+      const newLyrics = spliceExpandLyricGroup(
+        lyricsText,
+        rootSpan,
+        unit.slurSpans
+      );
+      setLyricsText(newLyrics);
+    },
+    [lyricsText, recordHistory]
+  );
+
+  const handleBreakGroup = useCallback(
+    (unit: MelodicUnit) => {
+      if (!unit.slurSpans || unit.slurSpans.length === 0) return;
+      recordHistory();
+      const newLyrics = spliceBreakLyricGroup(lyricsText, unit.slurSpans);
       setLyricsText(newLyrics);
     },
     [lyricsText, recordHistory]
@@ -443,6 +471,8 @@ export const App: React.FC = () => {
             onFlowToPrev={handleFlowToPrev}
             onEditLyric={handleEditLyric}
             onEditMelody={handleEditMelody}
+            onExpandGroup={handleExpandGroup}
+            onBreakGroup={handleBreakGroup}
           />
 
           {activeHelp && (
