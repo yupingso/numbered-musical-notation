@@ -1,101 +1,107 @@
 import JSZip from 'jszip';
-
-/** The deck is 4:3: 10in x 7.5in, expressed in English Metric Units. */
-const SLIDE_WIDTH_EMU = 9144000;
-const SLIDE_HEIGHT_EMU = 6858000;
-
-/** Relationship id used by every generated slide to reference its image. */
-const SLIDE_IMAGE_REL_ID = 'rId2';
+import { SongMetadata } from './types';
+import {
+  calculateTitleLayout,
+  splitTitleLines,
+  calculateSubtitleLayout,
+  splitSubtitleLines,
+} from './svgRenderer';
 
 export interface PptxExportOptions {
-  /** Template .pptx buffer supplying the slide master, layouts and theme */
+  /** Template .pptx file buffer (e.g. template.pptx containing Slide 1 title card) */
   templateData: ArrayBuffer | Uint8Array;
-  /** High-resolution PNGs for the notation slides, which become slides 2..N */
+  /** High-resolution PNG images for slides 2 to N */
   slidePngImages: (Uint8Array | Buffer)[];
-  /**
-   * High-resolution PNG of the title card, which replaces Slide 1.
-   *
-   * The title card ships as an image rather than as native text so that the
-   * exported deck is a pixel-exact copy of the on-screen design canvas, and so
-   * that it does not depend on 標楷體 being installed wherever the file is
-   * opened (the template embeds no fonts). When omitted, the template's own
-   * Slide 1 is left untouched.
-   */
-  titlePngImage?: Uint8Array | Buffer;
+  /** Optional song metadata to customize Slide 1 title card */
+  metadata?: SongMetadata;
+}
+
+function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&"']/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '"': return '&quot;';
+      case "'": return '&apos;';
+      default: return c;
+    }
+  });
 }
 
 /**
- * Builds a slide whose sole content is one full-bleed image.
- *
- * The image is stretched to the full slide, so the source PNG should already
- * match the deck's 4:3 aspect ratio.
+ * Updates Slide 1 XML shapes to reflect custom SongMetadata if present.
  */
-function buildImageSlideXml(): string {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld>
-    <p:spTree>
-      <p:nvGrpSpPr>
-        <p:cNvPr id="1" name=""/>
-        <p:cNvGrpSpPr/>
-        <p:nvPr/>
-      </p:nvGrpSpPr>
-      <p:grpSpPr>
-        <a:xfrm>
-          <a:off x="0" y="0"/>
-          <a:ext cx="0" cy="0"/>
-          <a:chOff x="0" y="0"/>
-          <a:chExt cx="0" cy="0"/>
-        </a:xfrm>
-      </p:grpSpPr>
-      <p:pic>
-        <p:nvPicPr>
-          <p:cNvPr id="2" name="NMN Slide Image"/>
-          <p:cNvPicPr>
-            <a:picLocks noChangeAspect="1"/>
-          </p:cNvPicPr>
-          <p:nvPr/>
-        </p:nvPicPr>
-        <p:blipFill>
-          <a:blip r:embed="${SLIDE_IMAGE_REL_ID}"/>
-          <a:stretch>
-            <a:fillRect/>
-          </a:stretch>
-        </p:blipFill>
-        <p:spPr>
-          <a:xfrm>
-            <a:off x="0" y="0"/>
-            <a:ext cx="${SLIDE_WIDTH_EMU}" cy="${SLIDE_HEIGHT_EMU}"/>
-          </a:xfrm>
-          <a:prstGeom prst="rect">
-            <a:avLst/>
-          </a:prstGeom>
-        </p:spPr>
-      </p:pic>
-    </p:spTree>
-  </p:cSld>
-  <p:clrMapOvr>
-    <a:masterClrMapping/>
-  </p:clrMapOvr>
-</p:sld>`;
-}
+export function updateSlide1Xml(slide1Xml: string, metadata?: SongMetadata): string {
+  if (!metadata) return slide1Xml;
 
-/** Builds the .rels part pairing an image slide with its layout and PNG. */
-function buildImageSlideRels(imageNum: number): string {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
-  <Relationship Id="${SLIDE_IMAGE_REL_ID}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${imageNum}.png"/>
-</Relationships>`;
+  let result = slide1Xml;
+
+  // 1. Update Title in Shape 43
+  if (metadata.title) {
+    const lines = splitTitleLines(metadata.title);
+    const layout = calculateTitleLayout(metadata.title);
+    const sz = Math.round((layout.fontSize * 10600) / 150);
+
+    const paragraphsXml = lines
+      .map(
+        (line) =>
+          `<a:p><a:pPr algn="ctr"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPts val="11"/></a:spcBef><a:spcAft><a:spcPts val="11"/></a:spcAft></a:pPr><a:r><a:rPr b="1" lang="zh-TW" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffcc00"/></a:solidFill><a:latin typeface="標楷體"/><a:ea typeface="標楷體"/></a:rPr><a:t>${escapeXml(
+            line
+          )}</a:t></a:r><a:endParaRPr b="0" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Arial"/></a:endParaRPr></a:p>`
+      )
+      .join('');
+
+    result = result.replace(
+      /(<p:cNvPr id="43"[^>]*>.*?<p:txBody>.*?<a:bodyPr[^>]*>.*?<\/a:bodyPr>)(?:.*?)(<\/p:txBody>)/s,
+      `$1${paragraphsXml}$2`
+    );
+  }
+
+  // 2. Update Subtitle in Shape 44
+  if (metadata.subtitle) {
+    const subLines = splitSubtitleLines(metadata.subtitle);
+    const isTitleMultiLine = splitTitleLines(metadata.title).length > 1;
+    const subLayout = calculateSubtitleLayout(metadata.subtitle, isTitleMultiLine);
+    const sz = Math.round((subLayout.fontSize * 4800) / 68);
+
+    const paragraphsXml = subLines
+      .map(
+        (line) =>
+          `<a:p><a:pPr algn="ctr"><a:lnSpc><a:spcPct val="100000"/></a:lnSpc><a:spcBef><a:spcPts val="11"/></a:spcBef><a:spcAft><a:spcPts val="11"/></a:spcAft></a:pPr><a:r><a:rPr b="1" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffcc00"/></a:solidFill><a:latin typeface="Times New Roman"/><a:ea typeface="標楷體"/></a:rPr><a:t>${escapeXml(
+            line
+          )}</a:t></a:r><a:endParaRPr b="0" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Arial"/></a:endParaRPr></a:p>`
+      )
+      .join('');
+
+    result = result.replace(
+      /(<p:cNvPr id="44"[^>]*>.*?<p:txBody>.*?<a:bodyPr[^>]*>.*?<\/a:bodyPr>)(?:.*?)(<\/p:txBody>)/s,
+      `$1${paragraphsXml}$2`
+    );
+  }
+
+  // 3. Update Album in P1
+  if (metadata.album) {
+    result = result.replace(
+      /(<a:p>.*?sz="5400".*?<a:t>)(?:[^<]*)(<\/a:t><\/a:r>)(?:<a:r>.*?<\/a:r>)*(.*?<\/a:p>)/s,
+      `$1${escapeXml(metadata.album)}$2$3`
+    );
+  }
+
+  // 4. Update Credits in P4
+  if (metadata.credits) {
+    result = result.replace(
+      /(<a:p>.*?algn="ctr".*?sz="4000".*?<a:t>)(?:[^<]*)(<\/a:t><\/a:r>)(?:<a:r>.*?<\/a:r>)*(.*?<\/a:p>)/s,
+      `$1${escapeXml(metadata.credits)}$2$3`
+    );
+  }
+
+  return result;
 }
 
 /**
- * Builds the exported deck from template.pptx.
- *
- * Every slide, including the Slide 1 title card, is emitted as a single
- * full-bleed image, so the deck renders identically regardless of the fonts
- * installed on the machine that opens it. The template supplies the slide
- * master, layouts and theme. Employs OpenXML standard packaging via JSZip.
+ * Appends rendered notation slide images to template.pptx (preserving Slide 1 title slide).
+ * Employs OpenXML standard packaging via JSZip.
  */
 export async function appendSlidesToPptx(options: PptxExportOptions): Promise<Uint8Array> {
   const { templateData, slidePngImages } = options;
@@ -155,16 +161,6 @@ export async function appendSlidesToPptx(options: PptxExportOptions): Promise<Ui
   let updatedPresRels = presRelsXml;
   let newSldIdXmlElements = '';
 
-  // Replace Slide 1 with the rendered title card image. The template's own
-  // Slide 1 already has a [Content_Types] override and a presentation.xml
-  // entry, so only its body, rels and media need to be supplied.
-  if (options.titlePngImage) {
-    const titleImageNum = nextImageNum++;
-    zip.file(`ppt/media/image${titleImageNum}.png`, options.titlePngImage);
-    zip.file('ppt/slides/slide1.xml', buildImageSlideXml());
-    zip.file('ppt/slides/_rels/slide1.xml.rels', buildImageSlideRels(titleImageNum));
-  }
-
   for (let i = 0; i < slidePngImages.length; i++) {
     const slideNum = nextSlideNum++;
     const slideId = nextSlideId++;
@@ -178,24 +174,87 @@ export async function appendSlidesToPptx(options: PptxExportOptions): Promise<Ui
     // 1. Add PNG media file
     zip.file(imageFilename, slidePngImages[i]);
 
-    // 2. Add slide XML and its relationships, identical in shape to Slide 1
-    zip.file(slideXmlPath, buildImageSlideXml());
-    zip.file(slideRelsPath, buildImageSlideRels(imageNum));
+    // 2. Add slide XML with image element (4:3 aspect ratio = 9144000 x 6858000 EMU)
+    const slideXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="0" cy="0"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="0" cy="0"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:pic>
+        <p:nvPicPr>
+          <p:cNvPr id="2" name="NMN Slide Image"/>
+          <p:cNvPicPr>
+            <a:picLocks noChangeAspect="1"/>
+          </p:cNvPicPr>
+          <p:nvPr/>
+        </p:nvPicPr>
+        <p:blipFill>
+          <a:blip r:embed="rId2"/>
+          <a:stretch>
+            <a:fillRect/>
+          </a:stretch>
+        </p:blipFill>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="9144000" cy="6858000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect">
+            <a:avLst/>
+          </a:prstGeom>
+        </p:spPr>
+      </p:pic>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMapOvr>
+    <a:masterClrMapping/>
+  </p:clrMapOvr>
+</p:sld>`;
+    zip.file(slideXmlPath, slideXml);
 
-    // 3. Update [Content_Types].xml override
+    // 3. Add slide relationships file
+    const slideRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${imageNum}.png"/>
+</Relationships>`;
+    zip.file(slideRelsPath, slideRelsXml);
+
+    // 4. Update [Content_Types].xml override
     const overrideEntry = `<Override PartName="/${slideXmlPath}" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`;
     updatedContentTypes = updatedContentTypes.replace('</Types>', `${overrideEntry}</Types>`);
 
-    // 4. Update presentation.xml.rels
+    // 5. Update presentation.xml.rels
     const relEntry = `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${slideNum}.xml"/>`;
     updatedPresRels = updatedPresRels.replace('</Relationships>', `${relEntry}</Relationships>`);
 
-    // 5. Accumulate presentation.xml slide elements
+    // 6. Accumulate presentation.xml slide elements
     newSldIdXmlElements += `<p:sldId id="${slideId}" r:id="${relId}"/>`;
   }
 
   // Update presentation.xml
   const updatedPresXml = presXml.replace('</p:sldIdLst>', `${newSldIdXmlElements}</p:sldIdLst>`);
+
+  // Update Slide 1 (title slide) with custom SongMetadata if provided
+  if (options.metadata) {
+    const slide1Xml = await zip.file('ppt/slides/slide1.xml')?.async('text');
+    if (slide1Xml) {
+      const updatedSlide1Xml = updateSlide1Xml(slide1Xml, options.metadata);
+      zip.file('ppt/slides/slide1.xml', updatedSlide1Xml);
+    }
+  }
 
   // Write updated XML files back to zip
   zip.file('[Content_Types].xml', updatedContentTypes);
