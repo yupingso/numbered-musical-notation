@@ -487,8 +487,7 @@ export function modifyMelodicUnitDuration(
   const alreadyHasTrailingTie = melodyText.slice(replaceEnd).trimStart().startsWith('~');
   const trailingTie =
     !alreadyHasTrailingTie &&
-    (unit.slurToNext ||
-      unit.segments[unit.segments.length - 1].tiedNext ||
+    (unit.segments[unit.segments.length - 1].tiedNext ||
       unit.segments[unit.segments.length - 1].rawToken?.endsWith('~'));
 
   if (!crossesBar) {

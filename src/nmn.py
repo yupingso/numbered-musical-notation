@@ -234,7 +234,7 @@ class Song:
                                          .format(note, time.upper, time.lower))
                     sub_note = note.copy()
                     sub_note.duration = sub_duration
-                    if not first:
+                    if not first and not note.is_rest:
                         sub_note.tie[0] = True
                     self.melody[-1][-1].append(sub_note)
                     remaining_duration -= sub_duration
@@ -249,18 +249,26 @@ class Song:
         (note0.tie[1] == note1.tie[0])."""
         if not self.melody:
             return
-        prev_tie = False
+        if self.melody[0][-1]:
+            self.melody[0][-1][0].tie[0] = False    # first note
+        if self.melody[-1][-1]:
+            self.melody[-1][-1][-1].tie[1] = False  # last note
+        prev_note = None
         for time, start_beat, notes in self.melody:
             if not notes:
                 raise ValueError('empty bar in self.melody')
             for note in notes:
-                if prev_tie:
+                if prev_note is not None and (prev_note.tie[1] or note.tie[0]):
+                    if (prev_note.is_rest or note.is_rest
+                            or note.name != prev_note.name
+                            or (note.acc or 0) != (prev_note.acc or 0)
+                            or note.octave != prev_note.octave):
+                        raise ValueError(
+                            'Tie (~) in melody must connect notes of the same '
+                            'pitch')
+                    prev_note.tie[1] = True
                     note.tie[0] = True
-                if note.is_rest:
-                    note.tie = [False, False]
-                prev_tie = note.tie[1]
-        self.melody[0][-1][0].tie[0] = False    # first note
-        self.melody[-1][-1][-1].tie[1] = False  # last note
+                prev_note = note
 
     def try_split_notes(self):
         """Try to split note, and modify self.melody in place.
@@ -710,8 +718,8 @@ def load_song(melody_file, lyrics_file=None):
             else:
                 s += line.replace(' ', '')
         song.append_time_signature(time, s)
-    song.try_split_notes()
     song.make_ties_consistent()
+    song.try_split_notes()
 
     # lyrics
     with open(lyrics_file, encoding='utf-8') as f:

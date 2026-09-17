@@ -60,39 +60,36 @@ describe('MelodicUnit AST Construction', () => {
     expect(line.units[3].lyric).toBe('D');
   });
 
-  it('handles Choice A: separates 1~2 into TWO MelodicUnits connected by a slur', () => {
-    const melody = `<key> C\n<time> 4/4\n| 1~2 3 4 |`;
-    const lyrics = `<tag> Verse 1\nA B C`;
-    const ast = parseClassicSong(melody, lyrics);
-
-    const line = ast.sections[0].lines[0];
-    // 1 and 2 have different pitches -> Choice A creates 2 distinct MelodicUnits
-    expect(line.units).toHaveLength(4);
-
-    const unit1 = line.units[0];
-    expect(unit1.pitch.name).toBe(1);
-    expect(unit1.duration.toNumber()).toBe(1.0);
-    expect(unit1.lyric).toBe('A');
-    expect(unit1.slurToNext).toBe(true);
-
-    const unit2 = line.units[1];
-    expect(unit2.pitch.name).toBe(2);
-    expect(unit2.duration.toNumber()).toBe(1.0);
-    expect(unit2.slurFromPrev).toBe(true);
-    expect(unit2.lyric).toBeUndefined(); // Slur continuation has no new syllable
-
-    const unit3 = line.units[2];
-    expect(unit3.pitch.name).toBe(3);
-    expect(unit3.lyric).toBe('B');
-
-    const unit4 = line.units[3];
-    expect(unit4.pitch.name).toBe(4);
-    expect(unit4.lyric).toBe('C');
+  it('disallows ties (~) between different pitches or rests in melody.txt', () => {
+    const cases = [
+      `<key> C\n<time> 4/4\n| 1~2 3 4 |`,
+      `<key> C\n<time> 4/4\n| 1~0 3 4 |`,
+      `<key> C\n<time> 4/4\n| 0~1 3 4 |`,
+      `<key> C\n<time> 4/4\n| 0~0 3 4 |`,
+      `<key> C\n<time> 4/4 hyphen=16\n| 1---~0--- 3--- 4--- |`,
+    ];
+    for (const melody of cases) {
+      const ast = parseClassicSong(melody, `<tag> Verse 1\nA B C D`);
+      expect(ast.errors).toContain('Tie (~) in melody must connect notes of the same pitch');
+    }
   });
 
-  it('handles multi-note slur 1~2~3 creating 3 distinct MelodicUnits with single syllable', () => {
-    const melody = `<key> C\n<time> 4/4\n| 1~2~3 4 |`;
-    const lyrics = `<tag> Verse 1\nA B`;
+  it('allows courtesy natural ties (~) in melody.txt', () => {
+    const cases = [
+      `<key> C\n<time> 4/4\n| 1~%1 2 3 |`,
+      `<key> C\n<time> 4/4\n| %1~1 2 3 |`,
+    ];
+    for (const melody of cases) {
+      const ast = parseClassicSong(melody, `<tag> Verse 1\nA B C`);
+      expect(ast.errors).toBeUndefined();
+      expect(ast.sections[0].lines[0].units).toHaveLength(3);
+      expect(ast.sections[0].lines[0].units[0].duration.toNumber()).toBe(2.0);
+    }
+  });
+
+  it('handles multi-note slur in lyrics.txt (A ~ ~ B) creating 3 distinct MelodicUnits with single syllable', () => {
+    const melody = `<key> C\n<time> 4/4\n| 1 2 3 4 |`;
+    const lyrics = `<tag> Verse 1\nA ~ ~ B`;
     const ast = parseClassicSong(melody, lyrics);
 
     const line = ast.sections[0].lines[0];
@@ -268,28 +265,27 @@ describe('Canonical Bracket Splitting & Suffix Preservation', () => {
 });
 
 describe('Slurs vs Ties Duration & Pitch Modifications', () => {
-  it('melodic slur head duration edit preserves outgoing slur tie: 1~2 -> 1 -~2', () => {
-    const melody = `<key> C\n<time> 4/4\n| 1~2 3 4 |`;
-    const lyrics = `<tag> Verse 1\nA B C`;
+  it('slur head duration edit preserves slur grouping: 1 2 (A ~ B) -> 1 - 2', () => {
+    const melody = `<key> C\n<time> 4/4\n| 1 2 3 4 |`;
+    const lyrics = `<tag> Verse 1\nA ~ B C`;
     const ast = parseClassicSong(melody, lyrics);
     const unit0 = ast.sections[0].lines[0].units[0];
 
     const updated = modifyMelodicUnitDuration(melody, unit0, 2.0);
-    expect(updated).toBe(`<key> C\n<time> 4/4\n| 1 -~2 3 4 |`);
+    expect(updated).toBe(`<key> C\n<time> 4/4\n| 1 - 2 3 4 |`);
 
     const newAst = parseClassicSong(updated, lyrics);
     expect(newAst.errors).toBeUndefined();
   });
 
-  it('melodic slur tail duration edit preserves incoming slur tie without double tildes: 1~2 -> 1~2 -', () => {
-    const melody = `<key> C\n<time> 4/4\n| 1~2 3 4 |`;
-    const lyrics = `<tag> Verse 1\nA B C`;
+  it('slur tail duration edit preserves slur grouping: 1 2 (A ~ B) -> 1 2 -', () => {
+    const melody = `<key> C\n<time> 4/4\n| 1 2 3 4 |`;
+    const lyrics = `<tag> Verse 1\nA ~ B C`;
     const ast = parseClassicSong(melody, lyrics);
     const unit1 = ast.sections[0].lines[0].units[1];
 
     const updated = modifyMelodicUnitDuration(melody, unit1, 2.0);
-    expect(updated).toBe(`<key> C\n<time> 4/4\n| 1~2 - 3 4 |`);
-    expect(updated).not.toContain('~~');
+    expect(updated).toBe(`<key> C\n<time> 4/4\n| 1 2 - 3 4 |`);
 
     const newAst = parseClassicSong(updated, lyrics);
     expect(newAst.errors).toBeUndefined();

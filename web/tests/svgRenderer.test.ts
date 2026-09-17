@@ -117,10 +117,10 @@ describe('SvgRenderer', () => {
     const melody = `<key> C
 <time> 4/4
 
-1~2 3 4
+1 2 3 4
 `;
     const lyrics = `<tag> 主歌
-一二三
+一~二三
 `;
     const ast = parseClassicSong(melody, lyrics);
     const line = ast.sections[0].lines[0];

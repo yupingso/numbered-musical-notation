@@ -439,7 +439,7 @@ export class ClassicSongParser {
 
           const subNote = note.copy();
           subNote.duration = subDuration;
-          if (!first) {
+          if (!first && !note.isRest) {
             subNote.tie[0] = true;
           }
           this.melody[this.melody.length - 1][2].push(subNote);
@@ -478,22 +478,37 @@ export class ClassicSongParser {
 
   makeTiesConsistent() {
     if (this.melody.length === 0) return;
-    let prevTie = false;
+    if (this.melody[0][2].length > 0) {
+      this.melody[0][2][0].tie[0] = false;
+    }
+    const lastBar = this.melody[this.melody.length - 1][2];
+    if (lastBar.length > 0) {
+      lastBar[lastBar.length - 1].tie[1] = false;
+    }
+
+    let prevNote: Note | null = null;
     for (const [, , notes] of this.melody) {
       if (notes.length === 0) throw new Error('Empty bar in melody');
       for (const note of notes) {
-        if (prevTie) {
-          note.tie[0] = true;
+        if (prevNote && (prevNote.tie[1] || note.tie[0])) {
+          if (
+            prevNote.isRest ||
+            note.isRest ||
+            note.name !== prevNote.name ||
+            (note.acc ?? 0) !== (prevNote.acc ?? 0) ||
+            note.octave !== prevNote.octave
+          ) {
+            this.errors.push('Tie (~) in melody must connect notes of the same pitch');
+            prevNote.tie[1] = false;
+            note.tie[0] = false;
+          } else {
+            prevNote.tie[1] = true;
+            note.tie[0] = true;
+          }
         }
-        if (note.isRest) {
-          note.tie = [false, false];
-        }
-        prevTie = note.tie[1];
+        prevNote = note;
       }
     }
-    this.melody[0][2][0].tie[0] = false;
-    const lastBar = this.melody[this.melody.length - 1][2];
-    lastBar[lastBar.length - 1].tie[1] = false;
   }
 
   mergeMelodyLyrics(): Section[] {
@@ -606,21 +621,10 @@ export class ClassicSongParser {
           node.melodySpan = { ...note.span };
         }
 
-        const prevNote =
-          lineNodeIdxPrev >= 0 && nodes[lineNodeIdxPrev].value instanceof Note
-            ? (nodes[lineNodeIdxPrev].value as Note)
-            : null;
-        const isSamePitch =
-          prevNote !== null &&
-          note.name === prevNote.name &&
-          note.acc === prevNote.acc &&
-          note.octave === prevNote.octave &&
-          note.isRest === prevNote.isRest;
-
         const segmentSpan: SourceSpan =
           note.tokenSpan || (note.span ? { ...note.span } : { start: 0, end: 0 });
 
-        if (note.tie[0] && isSamePitch && currentUnit !== null) {
+        if (note.tie[0] && currentUnit !== null) {
           // True Tie: continuation segment of currentUnit
           ties.push({ start: lineNodeIdxPrev, end: lineNodeIdx });
           (node.value as Note).tie[0] = true;
@@ -641,51 +645,6 @@ export class ClassicSongParser {
           currentUnit.segments.push(segment);
           currentUnit.duration = currentUnit.duration.add(note.duration);
           node.unitId = currentUnit.id;
-        } else if (note.tie[0] && !isSamePitch) {
-          // Choice A: Melodic Slur between different pitches (e.g. 1~2 in melody)
-          slurs.push({ start: lineNodeIdxPrev, end: lineNodeIdx });
-          (node.value as Note).tie[0] = false;
-          if (currentUnit) {
-            currentUnit.slurToNext = true;
-          }
-
-          const segment: UnitSegment = {
-            segmentIndex: 0,
-            barIndex: b,
-            beatInBar: beat,
-            duration: note.duration,
-            span: segmentSpan,
-            pitchSpan: note.span ? { ...note.span } : undefined,
-            rawToken: note.rawToken || '',
-            tiedPrev: false,
-            tiedNext: note.tie[1],
-            bracket: note.bracket ? { ...note.bracket } : undefined,
-          };
-          const unitId = `u_${sections.length - 1}_${curSection.lines.length - 1}_${line.units.length}`;
-          const newUnit: MelodicUnit = {
-            id: unitId,
-            pitch: {
-              accidental: note.acc,
-              name: note.name,
-              octave: note.octave,
-              restType:
-                note._name === Note.REST_AT_END
-                  ? 'o'
-                  : note._name === Note.REST_TO_MATCH_LYRICS
-                  ? 'O'
-                  : note.isRest
-                  ? '0'
-                  : undefined,
-              isRest: note.isRest,
-            },
-            duration: note.duration,
-            slurFromPrev: true,
-            segments: [segment],
-            melodySpan: note.span ? { ...note.span } : { ...segmentSpan },
-          };
-          line.units.push(newUnit);
-          currentUnit = newUnit;
-          node.unitId = newUnit.id;
         } else {
           // Normal note or lyric slur
           const segment: UnitSegment = {
@@ -969,8 +928,8 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
   if (time) {
     parser.appendTimeSignature(time, s, sOffsetMap);
   }
-  parser.trySplitNotes();
   parser.makeTiesConsistent();
+  parser.trySplitNotes();
 
   // Parse lyrics
   let lyricOffset = 0;
