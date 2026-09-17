@@ -189,12 +189,12 @@
     <node 02>  1   1/2  u1  已
     <node 03>  7,  1/2  u1  饒
 <time> 4/4 beat=0
-    <node 04>  2   1    u0  恕 ~
+    <node 04>  2   1    u0  恕
     <node 05>  1   1/2  u1  None
     <node 06>  1   1/2  u1  我 ~
     <node 07>  1   1    u0  None
-<ties> [(4, 5), (6, 7)]
-<slurs> []
+<ties> [(6, 7)]
+<slurs> [(4, 5)]
 <underlines>
     depth 1: [[0, 1], [2, 3], [5, 6]]
 <triplets> []
@@ -298,12 +298,12 @@
     <node 02>  1   1/2  u1  已
     <node 03>  7,  1/2  u1  得
 <time> 4/4 beat=0
-    <node 04>  2   1    u0  赦 ~
+    <node 04>  2   1    u0  赦
     <node 05>  1   1/2  u1  None
     <node 06>  1   1/2  u1  免 ~
     <node 07>  1   1    u0  None
-<ties> [(4, 5), (6, 7)]
-<slurs> []
+<ties> [(6, 7)]
+<slurs> [(4, 5)]
 <underlines>
     depth 1: [[0, 1], [2, 3], [5, 6]]
 <triplets> []

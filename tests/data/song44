@@ -102,13 +102,13 @@
     <node 00>  6   1/2  u1  祢
     <node 01>  7   1/2  u1  聖
 <time> 4/4 beat=0
-    <node 02>  6   1/2  u1  名 ~
+    <node 02>  6   1/2  u1  名
     <node 03>  5   3/2  u0  None ~
     <node 04>  .
     <node 05>  5   2    u0  None
     <node 06>  -
-<ties> [(2, 3), (3, 5)]
-<slurs> []
+<ties> [(3, 5)]
+<slurs> [(2, 3)]
 <underlines>
     depth 1: [[0, 1], [2, 2]]
 <triplets> []
@@ -216,7 +216,7 @@
     <node 00>  6   1/2  u1  依
     <node 01>  7   1/2  u1  靠
 <time> 4/4 beat=0
-    <node 02>  6   1/2  u1  祢 ~
+    <node 02>  6   1/2  u1  祢
     <node 03>  5   3/2  u0  None ~
     <node 04>  .
     <node 05>  5   2    u0  None ~
@@ -225,8 +225,8 @@
     <node 07>  5   3    u0  None
     <node 08>  -
     <node 09>  -
-<ties> [(2, 3), (3, 5), (5, 7)]
-<slurs> []
+<ties> [(3, 5), (5, 7)]
+<slurs> [(2, 3)]
 <underlines>
     depth 1: [[0, 1], [2, 2]]
 <triplets> []

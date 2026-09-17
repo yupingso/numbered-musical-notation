@@ -280,14 +280,14 @@
     <node 06>  1   1/2  u1  不
     <node 07>  7,  1/2  u1  被
 <time> 4/4 beat=0
-    <node 08>  1   3/4  u1  困 ~
+    <node 08>  1   3/4  u1  困
     <node 09>  .
     <node 10>  5,  1/4  u2  None
     <node 11>  5,  3    u0  住
     <node 12>  -
     <node 13>  -
-<ties> [(3, 4), (8, 10)]
-<slurs> []
+<ties> [(3, 4)]
+<slurs> [(8, 10)]
 <underlines>
     depth 1: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 10]]
     depth 2: [[10, 10]]
@@ -303,14 +303,14 @@
     <node 06>  1   1/2  u1  不
     <node 07>  2   1/2  u1  致
 <time> 4/4 beat=0
-    <node 08>  4   3/4  u1  失 ~
+    <node 08>  4   3/4  u1  失
     <node 09>  .
     <node 10>  3   1/4  u2  None
     <node 11>  3   3    u0  望
     <node 12>  -
     <node 13>  -
-<ties> [(3, 4), (8, 10)]
-<slurs> []
+<ties> [(3, 4)]
+<slurs> [(8, 10)]
 <underlines>
     depth 1: [[0, 1], [2, 3], [4, 5], [6, 7], [8, 10]]
     depth 2: [[10, 10]]

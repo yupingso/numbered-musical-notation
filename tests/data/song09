@@ -5,17 +5,17 @@
     <node 01>  4   1/2  u1  祢
 <time> 4/4 beat=0
     <node 02>  5   1    u0  使
-    <node 03>  3   1/2  u1  卑 ~
+    <node 03>  3   1/2  u1  卑
     <node 04>  2   1/2  u1  None
     <node 05>  1   1    u0  微
-    <node 06>  7,  1/2  u1  轉 ~
+    <node 06>  7,  1/2  u1  轉
     <node 07>  1   1/2  u1  None
 <time> 4/4 beat=0
     <node 08>  1   1    u0  為
     <node 09>  6,  1    u0  尊
     <node 10>  5,  1    u0  貴
-<ties> [(3, 4), (6, 7)]
-<slurs> []
+<ties> []
+<slurs> [(3, 4), (6, 7)]
 <underlines>
     depth 1: [[0, 1], [3, 4], [6, 7]]
 <triplets> []
@@ -27,14 +27,14 @@
     <node 02>  1   1    u0  心
     <node 03>  3   1    u0  流
     <node 04>  5   1    u0  淚
-    <node 05>  3   1/2  u1  轉 ~
+    <node 05>  3   1/2  u1  轉
     <node 06>  2   1/2  u1  None
 <time> 4/4 beat=0
     <node 07>  1   1    u0  為
     <node 08>  3   1    u0  笑
     <node 09>  2   1    u0  顏
-<ties> [(5, 6)]
-<slurs> []
+<ties> []
+<slurs> [(5, 6)]
 <underlines>
     depth 1: [[0, 1], [5, 6]]
 <triplets> []
@@ -44,7 +44,7 @@
     <node 01>  4   1/2  u1  難
 <time> 4/4 beat=0
     <node 02>  5   1    u0  生
-    <node 03>  3   1/2  u1  忍 ~
+    <node 03>  3   1/2  u1  忍
     <node 04>  2   1/2  u1  None
     <node 05>  1   1    u0  耐
     <node 06>  7,  1/2  u1  忍
@@ -53,8 +53,8 @@
     <node 08>  1   1    u0  生
     <node 09>  6,  1    u0  老
     <node 10>  5,  1    u0  練
-<ties> [(3, 4)]
-<slurs> []
+<ties> []
+<slurs> [(3, 4)]
 <underlines>
     depth 1: [[0, 1], [3, 4], [6, 7]]
 <triplets> []
@@ -149,11 +149,11 @@
     <node 01>  2   1/2  u1  與
 <time> 4/4 beat=0
     <node 02>  1   1    u0  我
-    <node 03>  2   1/2  u1  同 ~
+    <node 03>  2   1/2  u1  同
     <node 04>  3   1/2  u1  None
     <node 05>  2   1    u0  行
-<ties> [(3, 4)]
-<slurs> []
+<ties> []
+<slurs> [(3, 4)]
 <underlines>
     depth 1: [[0, 1], [3, 4]]
 <triplets> []
@@ -207,22 +207,22 @@
     <node 01>  2   1/2  u1  命
     <node 02>  2   1/2  u1  充
     <node 03>  3   1    u0  滿
-    <node 04>  2   1/2  u1  亮 ~
+    <node 04>  2   1/2  u1  亮
     <node 05>  1   1/2  u1  None
 <time> 4/4 beat=0
     <node 06>  1   3    u0  光
     <node 07>  -
     <node 08>  -
     <node 09>  0   1    u0  None
-<ties> [(4, 5)]
-<slurs> []
+<ties> []
+<slurs> [(4, 5)]
 <underlines>
     depth 1: [[1, 2], [4, 5]]
 <triplets> []
 --------------------------------------------------
 <time> 4/4 beat=0
     <node 00>  0   1    u0  None
-    <node 01>  5,  1    u0  喔 ~
+    <node 01>  5,  1    u0  喔
     <node 02>  1   2    u0  None
     <node 03>  -
 <time> 4/4 beat=0
@@ -233,15 +233,15 @@
     <node 08>  2   1/2  u1  None
     <node 09>  1   1/2  u1  None
     <node 10>  6,  1/2  u1  None
-<ties> [(1, 2)]
-<slurs> [(5, 10)]
+<ties> []
+<slurs> [(1, 2), (5, 10)]
 <underlines>
     depth 1: [[4, 4], [6, 6], [7, 8], [9, 10]]
 <triplets> []
 --------------------------------------------------
 <time> 4/4 beat=0
     <node 00>  0   1    u0  None
-    <node 01>  5,  1    u0  喔 ~
+    <node 01>  5,  1    u0  喔
     <node 02>  1   2    u0  None
     <node 03>  -
 <time> 4/4 beat=0
@@ -252,15 +252,15 @@
     <node 08>  2   1/2  u1  None
     <node 09>  1   1/2  u1  None
     <node 10>  2   1/2  u1  None
-<ties> [(1, 2)]
-<slurs> [(5, 10)]
+<ties> []
+<slurs> [(1, 2), (5, 10)]
 <underlines>
     depth 1: [[4, 4], [6, 6], [7, 8], [9, 10]]
 <triplets> []
 --------------------------------------------------
 <time> 4/4 beat=0
     <node 00>  0   1    u0  None
-    <node 01>  5,  1    u0  喔 ~
+    <node 01>  5,  1    u0  喔
     <node 02>  1   2    u0  None
     <node 03>  -
 <time> 4/4 beat=0
@@ -271,15 +271,15 @@
     <node 08>  2   1/2  u1  None
     <node 09>  1   1/2  u1  None
     <node 10>  6,  1/2  u1  None
-<ties> [(1, 2)]
-<slurs> [(5, 10)]
+<ties> []
+<slurs> [(1, 2), (5, 10)]
 <underlines>
     depth 1: [[4, 4], [6, 6], [7, 8], [9, 10]]
 <triplets> []
 --------------------------------------------------
 <time> 4/4 beat=0
     <node 00>  0   1    u0  None
-    <node 01>  5,  1    u0  喔 ~
+    <node 01>  5,  1    u0  喔
     <node 02>  1   2    u0  None
     <node 03>  -
 <time> 4/4 beat=0
@@ -294,8 +294,8 @@
     <node 11>  1   3    u0  None
     <node 12>  -
     <node 13>  -
-<ties> [(1, 2)]
-<slurs> [(5, 11)]
+<ties> []
+<slurs> [(1, 2), (5, 11)]
 <underlines>
     depth 1: [[4, 4], [6, 6], [7, 8], [9, 10]]
 <triplets> []
