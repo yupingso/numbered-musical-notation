@@ -206,7 +206,7 @@ export const App: React.FC = () => {
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = 'worship_nmn_slides.pptx';
+      a.download = 'nmn_slides.pptx';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -372,7 +372,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2">
             <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
             <span className="font-bold text-sm tracking-wide text-white hidden sm:inline">
-              詩歌投影片
+              簡譜投影片
             </span>
           </div>
 
@@ -380,7 +380,7 @@ export const App: React.FC = () => {
             type="button"
             onClick={handleLoadExample}
             className="px-2.5 py-1 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-xs font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
-            title="載入範例詩歌 (你真偉大)"
+            title="載入範例歌曲 (你真偉大)"
           >
             <span>📄</span>
             <span>載入範例</span>

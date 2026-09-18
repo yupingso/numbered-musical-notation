@@ -12,7 +12,7 @@ import { appendSlidesToPptx } from './core/pptxExporter';
 
 function printHelp() {
   console.log(`
-Worship Numbered Musical Notation to Presentation Slides (CLI)
+Numbered Musical Notation to Presentation Slides (CLI)
 
 Usage:
   npx tsx src/cli.ts <input> [output.pptx] [options]

@@ -52,7 +52,7 @@ describe('SourceSpan tracking in parserClassic', () => {
   });
 
   it('correctly tracks source spans with hyphen=16 and comments', () => {
-    const melodyText = `// Worship Intro
+    const melodyText = `// Intro
 <key> F
 <time> 4/4 hyphen=16
 // Verse
