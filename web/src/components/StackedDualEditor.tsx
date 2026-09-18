@@ -54,7 +54,7 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm font-medium'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/80 border border-transparent'
             }`}
-            title="旋律輸入語法說明"
+            title="旋律說明"
           >
             <span>❓</span>
             <span>說明</span>
@@ -88,7 +88,7 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
                 ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm font-medium'
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/80 border border-transparent'
             }`}
-            title="歌詞輸入語法說明"
+            title="歌詞說明"
           >
             <span>❓</span>
             <span>說明</span>
