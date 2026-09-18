@@ -1019,6 +1019,37 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
       const ctx1 = buildUnitContext(0, 1, slide);
       expect(ctx1?.canExpandGroup).toBe(true);
     });
+
+    it('updates slide preview when linking notes even while melody is partially typed or has bar overflow', async () => {
+      const { SvgRenderer, splitAstIntoSlides } = await import('../src/core/svgRenderer');
+      const { spliceExpandLyricGroup } = await import('../src/core/sourceSplicer');
+
+      // Full lyrics typed first, only partial melody typed (with a bar overflow on the trailing note)
+      const fullLyrics = `<tag> 主歌\n主阿我神\n我每逢舉目觀看`;
+      const partialMelody = `<key> C\n<time> 4/4\n1 2 3 5 -`;
+
+      const astBefore = parseClassicSong(partialMelody, fullLyrics);
+      expect(astBefore.errors).toBeDefined();
+      expect(astBefore.sections.length).toBeGreaterThan(0);
+
+      const u0 = astBefore.sections[0].lines[0].units[0];
+      const newLyrics = spliceExpandLyricGroup(
+        fullLyrics,
+        u0.slurRootLyricSpan || u0.lyricSpan!,
+        u0.slurSpans
+      );
+      expect(newLyrics).toContain('主~阿我神');
+
+      const astAfter = parseClassicSong(partialMelody, newLyrics);
+      const slidesAfter = splitAstIntoSlides(astAfter.sections);
+      expect(slidesAfter.length).toBeGreaterThan(0);
+      expect(slidesAfter[0].line1.slurs).toEqual([{ start: 0, end: 1 }]);
+
+      const renderer = new SvgRenderer();
+      const svgBefore = renderer.renderSlide(splitAstIntoSlides(astBefore.sections)[0]);
+      const svgAfter = renderer.renderSlide(slidesAfter[0]);
+      expect(svgAfter).not.toBe(svgBefore);
+    });
   });
 });
 

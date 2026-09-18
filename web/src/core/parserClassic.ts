@@ -293,7 +293,7 @@ export class ClassicSongParser {
           (durationStr.match(/_/g) || []).length;
 
         if (dashes > 0 && underlines > 0) {
-          throw new Error(`Wrong format for bar notes ${bar}`);
+          this.errors.push(`Wrong format for bar notes ${bar}`);
         }
 
         let triplet = new Fraction(1);
@@ -313,7 +313,7 @@ export class ClassicSongParser {
               .mul(triplet);
           } else {
             if (dots > 0 || underlines > 0 || !triplet.equals(1)) {
-              throw new Error('Dots, underlines and triplets are not allowed without brackets in hyphenated time');
+              this.errors.push('Dots, underlines and triplets are not allowed without brackets in hyphenated time');
             }
             duration = new Fraction(dashes + 1, Math.floor(time.hyphen / 4));
             dashesFinal = null;
@@ -336,7 +336,15 @@ export class ClassicSongParser {
         let currentPitchOffsetInRaw = isBracketed ? 1 : 0;
         for (let k = 0; k < pitchMatches.length; k++) {
           const pitch = pitchMatches[k];
-          const [acc, name, octave] = parsePitch(this.key, pitch);
+          let acc: Accidental | null;
+          let name: number;
+          let octave: number;
+          try {
+            [acc, name, octave] = parsePitch(this.key, pitch);
+          } catch (err: any) {
+            this.errors.push(err?.message || `Wrong format for pitch ${pitch}`);
+            continue;
+          }
           const tie: [boolean, boolean] = [tie0, tie1];
           if (k > 0) tie[0] = false;
           if (k < pitchMatches.length - 1) tie[1] = false;
@@ -396,7 +404,7 @@ export class ClassicSongParser {
       }
 
       if (matchedLen !== bar.length) {
-        throw new Error(`Wrong format for bar '${bar}'`);
+        this.errors.push(`Wrong format for bar '${bar}'`);
       }
       if (noteList.length === 0) continue;
 
@@ -434,7 +442,7 @@ export class ClassicSongParser {
           const subDuration = remainingDuration.lessThan(timeCap) ? remainingDuration : timeCap;
 
           if (!time.hyphen && !subDuration.equals(remainingDuration)) {
-            throw new Error(`Note ${note} goes beyond one bar in time ${time.upper}/${time.lower}`);
+            this.errors.push(`Note ${note.toPitchString()} goes beyond one bar in time ${time.upper}/${time.lower}`);
           }
 
           const subNote = note.copy();
@@ -488,7 +496,10 @@ export class ClassicSongParser {
 
     let prevNote: Note | null = null;
     for (const [, , notes] of this.melody) {
-      if (notes.length === 0) throw new Error('Empty bar in melody');
+      if (notes.length === 0) {
+        this.errors.push('Empty bar in melody');
+        continue;
+      }
       for (const note of notes) {
         if (prevNote && (prevNote.tie[1] || note.tie[0])) {
           if (
@@ -530,6 +541,10 @@ export class ClassicSongParser {
     const allLyrics = Array.from(this.lyrics.flatMap(([, lines]) => lines).join(''));
     const allLyricSpans = this.lyricsSpans.flatMap(([, lines]) => lines.flatMap((s) => s));
     const numWords = allLyrics.length;
+    const totalMelodyNotesToMatch = this.melody.reduce(
+      (acc, [, , ns]) => acc + ns.filter((n) => n.toMatchLyrics).length,
+      0
+    );
 
     let lyricsIdx = 0;
     let totalNotesToMatchLyrics = 0;
@@ -589,11 +604,18 @@ export class ClassicSongParser {
         }
 
         // Handle slurs
+        const isLastMatchedNote =
+          note.toMatchLyrics && totalNotesToMatchLyrics + 1 === totalMelodyNotesToMatch;
         if (note.isRest) {
           potentialSlurStartLineNodeIdx = null;
         } else {
           if (note.toMatchLyrics && lyricsIdx < numWords && allLyrics[lyricsIdx] === '~') {
-            if (lyricsIdx === numWords - 1 || allLyrics[lyricsIdx + 1] !== '~') {
+            if (
+              lyricsIdx === numWords - 1 ||
+              allLyrics[lyricsIdx + 1] !== '~' ||
+              isLastMatchedNote ||
+              splitLines.has(lyricsIdx + 1)
+            ) {
               if (potentialSlurStartLineNodeIdx === null) {
                 this.errors.push('Start note of slur not found');
               } else {
@@ -877,7 +899,7 @@ export class ClassicSongParser {
         if (note.duration.den % 3 === 0) {
           if (newGroup || rawTriplets.length === 0 || !note.duration.equals(tripletDuration ?? 0)) {
             if (rawTriplets.length > 0 && rawTriplets[rawTriplets.length - 1].length !== 3) {
-              throw new Error('triplet with less than 3 notes');
+              this.errors.push('triplet with less than 3 notes');
             }
             rawTriplets.push([idx]);
           } else if (rawTriplets[rawTriplets.length - 1].length === 3) {
@@ -915,8 +937,14 @@ export class ClassicSongParser {
       }
     }
 
+    if (rawTriplets.length > 0 && rawTriplets[rawTriplets.length - 1].length !== 3) {
+      this.errors.push('triplet with less than 3 notes');
+    }
+
     line.underlinesList = underlinesList;
-    line.triplets = rawTriplets.map((t) => ({ start: t[0], middle: t[1], end: t[2] }));
+    line.triplets = rawTriplets
+      .filter((t) => t.length === 3)
+      .map((t) => ({ start: t[0], middle: t[1], end: t[2] }));
   }
 }
 
@@ -946,14 +974,29 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
     if (line.startsWith('<key>')) {
       if (parser.key && parser.melody.length > 0) {
-        throw new Error('Only one <key> is allowed');
+        parser.errors.push('Only one <key> is allowed');
       }
-      parser.key = parseKey(line.slice(5).trim());
+      try {
+        parser.key = parseKey(line.slice(5).trim());
+      } catch (err: any) {
+        parser.errors.push(err?.message || `Wrong format for <key>`);
+      }
     } else if (line.startsWith('<time>')) {
-      if (time) {
+      if (s) {
+        if (!time) {
+          parser.errors.push('Missing <time> before notes (defaulting to 4/4)');
+          time = { upper: 4, lower: 4 };
+        }
         parser.appendTimeSignature(time, s, sOffsetMap);
+        s = '';
+        sOffsetMap = [];
       }
-      time = parseTime(line.slice(6).trim());
+      try {
+        time = parseTime(line.slice(6).trim());
+      } catch (err: any) {
+        parser.errors.push(err?.message || `Wrong format for <time>`);
+        if (!time) time = { upper: 4, lower: 4 };
+      }
       s = '';
       sOffsetMap = [];
     } else if (line.startsWith('<slur_starts_at_leading_note>')) {
@@ -982,6 +1025,9 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
   }
   if (time) {
     parser.appendTimeSignature(time, s, sOffsetMap);
+  } else if (s) {
+    parser.errors.push('Missing <time> (defaulting to 4/4)');
+    parser.appendTimeSignature({ upper: 4, lower: 4 }, s, sOffsetMap);
   }
   parser.makeTiesConsistent();
   parser.trySplitNotes();
