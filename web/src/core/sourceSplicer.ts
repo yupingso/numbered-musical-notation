@@ -1,4 +1,4 @@
-import { KeySignature, parseClassicSong, parsePitch, parseTime } from './parserClassic';
+import { IGNORED_LYRIC_CHARS, KeySignature, parseClassicSong, parsePitch, parseTime } from './parserClassic';
 import { MelodicUnit, NodeElement, Note, SongMetadata, SourceSpan } from './types';
 import {
   formatSingleNoteToken,
@@ -9,9 +9,9 @@ import {
 export { formatSingleNoteToken, decomposeNoteAcrossBars };
 
 /**
- * Punctuation characters commonly found attached to lyric syllables.
+ * Punctuation and slur characters commonly found attached to lyric syllables.
  */
-const LYRIC_PUNCTUATION_CHARS = ',.!?　。，、！？;；:：~';
+const LYRIC_PUNCTUATION_CHARS = `${IGNORED_LYRIC_CHARS.trim()}~`;
 
 /**
  * Surgically inserts a newline in lyricsText before the syllable at lyricSpan.

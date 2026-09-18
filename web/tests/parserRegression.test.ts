@@ -123,4 +123,13 @@ describe('parseClassicSong with real songs in repo', () => {
       expect(ast.sections[0].lines.length).toBeGreaterThan(0);
     });
   }
+
+  it('skips full-width and half-width semicolons and colons (; ； : ：) in lyrics', () => {
+    const melody = `<key> C\n<time> 4/4\n1 2 3 4`;
+    const lyrics = `<tag> 主歌\n一；二：三;四:`;
+    const ast = parseClassicSong(melody, lyrics);
+    expect(ast.errors).toBeUndefined();
+    const matchedLyrics = ast.sections[0].lines[0].nodes.map((n) => n.text).filter(Boolean);
+    expect(matchedLyrics).toEqual(['一', '二', '三', '四']);
+  });
 });

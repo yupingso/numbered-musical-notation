@@ -948,6 +948,8 @@ export class ClassicSongParser {
   }
 }
 
+export const IGNORED_LYRIC_CHARS = ' ,.!?　。，、！？;；:：';
+
 export function parseClassicSong(melodyText: string, lyricsText: string): SongAST {
   const parser = new ClassicSongParser();
   const metadata: SongMetadata = {};
@@ -1064,7 +1066,7 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
     while (c < line.length) {
       const codePoint = line.codePointAt(c)!;
       const ch = String.fromCodePoint(codePoint);
-      if (!' ,.!?　。，、！？'.includes(ch)) {
+      if (!IGNORED_LYRIC_CHARS.includes(ch)) {
         cleaned += ch;
         lineSpans.push({ start: lineStart + c, end: lineStart + c + ch.length });
       }

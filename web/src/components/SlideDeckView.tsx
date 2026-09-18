@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { IGNORED_LYRIC_CHARS } from '../core/parserClassic';
 import { isValidPitchString, normalizePitchString } from '../core/sourceSplicer';
 import { SvgRenderer } from '../core/svgRenderer';
 import { MelodicUnit, NodeElement, Note, SheetSlide, SongMetadata, SourceSpan } from '../core/types';
@@ -67,7 +68,7 @@ const NoteInspectorBar: React.FC<NoteInspectorBarProps> = ({
   const isLyricValid =
     (!hasGroupLyric && editLyricVal.trim() === '') ||
     (lyricCodePoints.length === 1 &&
-      !' ,.!?　。，、！？\r\n~'.includes(editLyricVal.trim()));
+      !`${IGNORED_LYRIC_CHARS}\r\n~`.includes(editLyricVal.trim()));
   const canCommit = isPitchValid && isLyricValid;
 
   const commitEdit = useCallback(() => {

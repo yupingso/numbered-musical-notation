@@ -726,7 +726,7 @@ def load_song(melody_file, lyrics_file=None):
         for line in f:
             line = line.strip()
             s = line
-            for c in ' ,.!?' + '　。，、！？':
+            for c in ' ,.!?;:' + '　。，、！？；：':
                 s = s.replace(c, '')
             if s == 'break':
                 break
