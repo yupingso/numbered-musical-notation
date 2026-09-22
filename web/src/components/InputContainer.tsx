@@ -7,6 +7,7 @@ interface InputContainerProps {
   setMelodyText: (val: string) => void;
   lyricsText: string;
   setLyricsText: (val: string) => void;
+  onImportSource?: (melody: string, lyrics: string) => void;
   activeHelp: HelpType | null;
   onToggleHelp: (type: HelpType) => void;
 }
@@ -16,6 +17,7 @@ export const InputContainer: React.FC<InputContainerProps> = ({
   setMelodyText,
   lyricsText,
   setLyricsText,
+  onImportSource,
   activeHelp,
   onToggleHelp,
 }) => {
@@ -28,6 +30,7 @@ export const InputContainer: React.FC<InputContainerProps> = ({
           setMelodyText={setMelodyText}
           lyricsText={lyricsText}
           setLyricsText={setLyricsText}
+          onImportSource={onImportSource}
           activeHelp={activeHelp}
           onToggleHelp={onToggleHelp}
         />

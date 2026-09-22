@@ -1051,6 +1051,44 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
       expect(svgAfter).not.toBe(svgBefore);
     });
   });
+
+  describe('.nmn Source File Serialization & Parsing', () => {
+    it('round-trips melody and lyrics via serializeNmnSource and parseNmnSource', async () => {
+      const { serializeNmnSource, parseNmnSource } = await import('../src/core/sourceFile');
+      const melody = `<key> C\n<time> 4/4\n| 1 2 3 5 |`;
+      const lyrics = `<title> 你真偉大\n<tag> 主歌\n主阿我神`;
+
+      const serialized = serializeNmnSource(melody, lyrics);
+      const parsedObj = JSON.parse(serialized);
+      expect(parsedObj.version).toBe(1);
+      expect(parsedObj.melody).toBe(melody);
+      expect(parsedObj.lyrics).toBe(lyrics);
+
+      const roundTripped = parseNmnSource(serialized);
+      expect(roundTripped).toEqual({ melody, lyrics });
+    });
+
+    it('rejects malformed JSON or missing fields in parseNmnSource', async () => {
+      const { parseNmnSource } = await import('../src/core/sourceFile');
+      expect(() => parseNmnSource('not json')).toThrow('無效的 .nmn 原始檔格式');
+      expect(() => parseNmnSource(JSON.stringify({ version: 1, melody: '1 2 3' }))).toThrow(
+        '缺少旋律 (melody) 或歌詞 (lyrics) 欄位'
+      );
+      expect(() => parseNmnSource(JSON.stringify({ version: 1, melody: 123, lyrics: 'abc' }))).toThrow(
+        '缺少旋律 (melody) 或歌詞 (lyrics) 欄位'
+      );
+    });
+
+    it('derives sanitized filename stems from metadata title', async () => {
+      const { getSongFileStem } = await import('../src/core/sourceFile');
+      expect(getSongFileStem(undefined, 'nmn_song')).toBe('nmn_song');
+      expect(getSongFileStem({ title: '你真偉大' }, 'nmn_song')).toBe('你真偉大');
+      expect(getSongFileStem({ title: '你真偉大\\nHow Great Thou Art' }, 'nmn_song')).toBe('你真偉大');
+      expect(getSongFileStem({ title: '奇異恩典: Amazing / Grace?' }, 'nmn_song')).toBe(
+        '奇異恩典_ Amazing _ Grace_'
+      );
+    });
+  });
 });
 
 

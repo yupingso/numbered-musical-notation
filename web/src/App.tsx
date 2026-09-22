@@ -21,6 +21,7 @@ import {
   spliceMelodyPitch,
   updateLyricsMetadata,
 } from './core/sourceSplicer';
+import { getSongFileStem, parseNmnSource, serializeNmnSource } from './core/sourceFile';
 import { EXAMPLE_SONG_01 } from './examples';
 
 export const App: React.FC = () => {
@@ -46,6 +47,51 @@ export const App: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [activeHelp, setActiveHelp] = useState<HelpType | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
+
+  const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const importMenuRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown menus when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isImportMenuOpen && !isExportMenuOpen) return;
+
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (
+        isImportMenuOpen &&
+        importMenuRef.current &&
+        target &&
+        !importMenuRef.current.contains(target)
+      ) {
+        setIsImportMenuOpen(false);
+      }
+      if (
+        isExportMenuOpen &&
+        exportMenuRef.current &&
+        target &&
+        !exportMenuRef.current.contains(target)
+      ) {
+        setIsExportMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsImportMenuOpen(false);
+        setIsExportMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isImportMenuOpen, isExportMenuOpen]);
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -206,7 +252,7 @@ export const App: React.FC = () => {
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = 'nmn_slides.pptx';
+      a.download = `${getSongFileStem(metadata, 'nmn_slides')}.pptx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -216,6 +262,46 @@ export const App: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleDownloadSource = () => {
+    const jsonContent = serializeNmnSource(melodyText, lyricsText);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `${getSongFileStem(metadata, 'nmn_song')}.nmn`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+  };
+
+  const handleImportSource = useCallback(
+    (newMelody: string, newLyrics: string) => {
+      recordHistory();
+      setMelodyText(newMelody);
+      setLyricsText(newLyrics);
+      setMetadata(parseSongMetadata(newLyrics, newMelody));
+    },
+    [recordHistory]
+  );
+
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      try {
+        const parsed = parseNmnSource(content);
+        handleImportSource(parsed.melody, parsed.lyrics);
+      } catch (err: any) {
+        alert(`匯入失敗: ${err.message}`);
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
   };
 
   const handleUpdateMetadata = useCallback(
@@ -363,11 +449,23 @@ export const App: React.FC = () => {
     [melodyText, recordHistory]
   );
 
+  const canExportPptx = !isExporting && slidesSvg.length > 0 && (alignmentStatus?.valid ?? true);
+  const canExportSource = Boolean(melodyText.trim() || lyricsText.trim());
+
   return (
     <div className="flex flex-col h-dvh bg-[#05070e] text-slate-100 select-text overflow-hidden">
+      {/* Hidden file input for importing .nmn source files */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".nmn,.json,application/json"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
+
       {/* Global Top Bar (Full Width, Modern High-Contrast Royal Navy Header) */}
-      <header className="min-h-12 md:h-12 px-4 py-1.5 md:py-0 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 bg-[#0f1f38] border-b-2 border-sky-500/80 shadow-md shrink-0 z-20 relative">
-        {/* Left: Branding & Example Loader */}
+      <header className="min-h-12 md:h-12 px-4 py-1.5 md:py-0 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 bg-[#0f1f38] border-b-2 border-sky-500/80 shadow-md shrink-0 z-30 relative">
+        {/* Left: Branding & Import Dropdown */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
@@ -376,15 +474,100 @@ export const App: React.FC = () => {
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleLoadExample}
-            className="px-2.5 py-1 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-xs font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
-            title="載入範例歌曲 (你真偉大)"
-          >
-            <span>📄</span>
-            <span>載入範例</span>
-          </button>
+          <div ref={importMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsImportMenuOpen((prev) => !prev);
+                setIsExportMenuOpen(false);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={isImportMenuOpen}
+              className="px-2.5 py-1 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-xs font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
+              title="匯入原始檔或載入範例歌曲"
+            >
+              <span>匯入</span>
+              <svg
+                className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-150 ${
+                  isImportMenuOpen ? 'rotate-180' : ''
+                }`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {isImportMenuOpen && (
+              <div
+                role="menu"
+                className="absolute left-0 mt-1.5 w-52 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsImportMenuOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-2.5 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-white">匯入原始檔 (.nmn)</span>
+                    <span className="text-[11px] text-slate-400">從電腦讀取已儲存的簡譜檔</span>
+                  </div>
+                </button>
+
+                <div className="my-1 border-t border-slate-800" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsImportMenuOpen(false);
+                    handleLoadExample();
+                  }}
+                  className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-2.5 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-white">載入範例</span>
+                    <span className="text-[11px] text-slate-400">範例歌曲：你真偉大</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Center: Live Validation Status Indicator in Flex Flow */}
@@ -412,20 +595,19 @@ export const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right: Export PPTX Button */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Export Dropdown */}
+        <div ref={exportMenuRef} className="relative flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={handleDownloadPptx}
-            disabled={isExporting || slidesSvg.length === 0 || !(alignmentStatus?.valid ?? true)}
+            onClick={() => {
+              setIsExportMenuOpen((prev) => !prev);
+              setIsImportMenuOpen(false);
+            }}
+            disabled={isExporting}
+            aria-haspopup="menu"
+            aria-expanded={isExportMenuOpen}
             className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-xs rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
-            title={
-              !(alignmentStatus?.valid ?? true)
-                ? `存在錯誤，無法下載：${alignmentStatus?.message}`
-                : slidesSvg.length === 0
-                ? '無可下載的投影片'
-                : '下載 OpenXML .pptx 簡報檔案'
-            }
+            title="匯出簡報 (.pptx) 或原始檔 (.nmn)"
           >
             {isExporting ? (
               <>
@@ -434,11 +616,98 @@ export const App: React.FC = () => {
               </>
             ) : (
               <>
-                <span className="text-sm">📥</span>
-                <span>下載</span>
+                <span>匯出</span>
+                <svg
+                  className={`w-3.5 h-3.5 text-sky-100 transition-transform duration-150 ${
+                    isExportMenuOpen ? 'rotate-180' : ''
+                  }`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </>
             )}
           </button>
+
+          {isExportMenuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1.5 w-60 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canExportPptx}
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  handleDownloadPptx();
+                }}
+                className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-2.5 cursor-pointer"
+              >
+                <svg
+                  className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-white">匯出簡報 (.pptx)</span>
+                  <span className="text-[11px] text-slate-400">
+                    {!canExportPptx
+                      ? !(alignmentStatus?.valid ?? true)
+                        ? `需先修正錯誤：${alignmentStatus?.message}`
+                        : '無可匯出的投影片'
+                      : '下載 4:3 PowerPoint 投影片'}
+                  </span>
+                </div>
+              </button>
+
+              <div className="my-1 border-t border-slate-800" />
+
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canExportSource}
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  handleDownloadSource();
+                }}
+                className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-2.5 cursor-pointer"
+              >
+                <svg
+                  className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-white">匯出原始檔 (.nmn)</span>
+                  <span className="text-[11px] text-slate-400">
+                    下載旋律與歌詞，供日後匯入編輯
+                  </span>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -451,6 +720,7 @@ export const App: React.FC = () => {
             setMelodyText={setMelodyText}
             lyricsText={lyricsText}
             setLyricsText={setLyricsText}
+            onImportSource={handleImportSource}
             activeHelp={activeHelp}
             onToggleHelp={(type) => setActiveHelp((prev) => (prev === type ? null : type))}
           />

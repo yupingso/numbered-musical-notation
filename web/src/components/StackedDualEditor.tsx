@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseNmnSource } from '../core/sourceFile';
 import { HelpType } from './SyntaxHelpOverlay';
 
 interface StackedDualEditorProps {
@@ -6,6 +7,7 @@ interface StackedDualEditorProps {
   setMelodyText: (val: string) => void;
   lyricsText: string;
   setLyricsText: (val: string) => void;
+  onImportSource?: (melody: string, lyrics: string) => void;
   activeHelp: HelpType | null;
   onToggleHelp: (type: HelpType) => void;
 }
@@ -15,6 +17,7 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
   setMelodyText,
   lyricsText,
   setLyricsText,
+  onImportSource,
   activeHelp,
   onToggleHelp,
 }) => {
@@ -28,6 +31,23 @@ export const StackedDualEditor: React.FC<StackedDualEditorProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
+      if (file.name.toLowerCase().endsWith('.nmn') || content.trim().startsWith('{')) {
+        try {
+          const parsed = parseNmnSource(content);
+          if (onImportSource) {
+            onImportSource(parsed.melody, parsed.lyrics);
+          } else {
+            setMelodyText(parsed.melody);
+            setLyricsText(parsed.lyrics);
+          }
+          return;
+        } catch (err: any) {
+          if (file.name.toLowerCase().endsWith('.nmn')) {
+            alert(`匯入失敗: ${err.message}`);
+            return;
+          }
+        }
+      }
       setter(content);
     };
     reader.readAsText(file, 'utf-8');
