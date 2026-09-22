@@ -469,7 +469,7 @@ export const App: React.FC = () => {
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
-            <span className="font-bold text-sm tracking-wide text-white hidden sm:inline">
+            <span className="font-bold text-base tracking-wide text-white hidden sm:inline">
               簡譜投影片
             </span>
           </div>
@@ -483,12 +483,12 @@ export const App: React.FC = () => {
               }}
               aria-haspopup="menu"
               aria-expanded={isImportMenuOpen}
-              className="px-2.5 py-1 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-xs font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
+              className="px-3 py-1.5 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-sm font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
               title="匯入原始檔或載入範例歌曲"
             >
               <span>匯入</span>
               <svg
-                className={`w-3.5 h-3.5 text-slate-300 transition-transform duration-150 ${
+                className={`w-4 h-4 text-slate-200 transition-transform duration-150 ${
                   isImportMenuOpen ? 'rotate-180' : ''
                 }`}
                 viewBox="0 0 24 24"
@@ -505,7 +505,7 @@ export const App: React.FC = () => {
             {isImportMenuOpen && (
               <div
                 role="menu"
-                className="absolute left-0 mt-1.5 w-52 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
+                className="absolute left-0 mt-1.5 w-80 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-2 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
               >
                 <button
                   type="button"
@@ -514,14 +514,14 @@ export const App: React.FC = () => {
                     setIsImportMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
-                  className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-2.5 cursor-pointer"
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-3 cursor-pointer"
                 >
                   <svg
-                    className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                    className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="1.9"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -529,13 +529,13 @@ export const App: React.FC = () => {
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-white">匯入原始檔 (.nmn)</span>
-                    <span className="text-[11px] text-slate-400">從電腦讀取已儲存的簡譜檔</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">匯入原始檔 (.nmn)</span>
+                    <span className="text-xs text-slate-300">從電腦讀取已儲存的簡譜檔</span>
                   </div>
                 </button>
 
-                <div className="my-1 border-t border-slate-800" />
+                <div className="my-1.5 border-t border-slate-800" />
 
                 <button
                   type="button"
@@ -544,14 +544,14 @@ export const App: React.FC = () => {
                     setIsImportMenuOpen(false);
                     handleLoadExample();
                   }}
-                  className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-2.5 cursor-pointer"
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-3 cursor-pointer"
                 >
                   <svg
-                    className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                    className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="1.9"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -560,9 +560,9 @@ export const App: React.FC = () => {
                     <line x1="16" y1="13" x2="8" y2="13" />
                     <line x1="16" y1="17" x2="8" y2="17" />
                   </svg>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-white">載入範例</span>
-                    <span className="text-[11px] text-slate-400">範例歌曲：你真偉大</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">載入範例</span>
+                    <span className="text-xs text-slate-300">範例歌曲：你真偉大</span>
                   </div>
                 </button>
               </div>
@@ -574,7 +574,7 @@ export const App: React.FC = () => {
         <div className="flex items-center justify-center flex-1 min-w-0 order-last w-full md:order-none md:w-auto">
           {alignmentStatus && (
             alignmentStatus.valid ? (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950/90 border border-emerald-500 text-emerald-100 text-xs rounded-full font-bold shadow-sm">
+              <div className="flex items-center gap-1.5 px-3.5 py-1 bg-emerald-950/90 border border-emerald-500 text-emerald-100 text-sm rounded-full font-bold shadow-sm">
                 <span className="text-emerald-400 font-bold text-sm">✓</span>
                 <span>{alignmentStatus.message}</span>
               </div>
@@ -582,12 +582,12 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowErrorModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-100 text-xs rounded-full font-bold shadow-sm transition cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-100 text-sm rounded-full font-bold shadow-sm transition cursor-pointer"
                 title={alignmentStatus.details ? `${alignmentStatus.message}\n點擊查看錯誤詳情` : alignmentStatus.message}
               >
                 <span className="text-amber-400 font-bold text-sm">⚠️</span>
                 <span className="truncate">{alignmentStatus.message}</span>
-                <span className="text-xs bg-amber-800 px-1.5 py-0.5 rounded text-white font-bold border border-amber-400 shrink-0">
+                <span className="text-xs bg-amber-800 px-2 py-0.5 rounded text-white font-bold border border-amber-400 shrink-0">
                   詳情
                 </span>
               </button>
@@ -606,19 +606,19 @@ export const App: React.FC = () => {
             disabled={isExporting}
             aria-haspopup="menu"
             aria-expanded={isExportMenuOpen}
-            className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-xs rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
+            className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-sm rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
             title="匯出簡報 (.pptx) 或原始檔 (.nmn)"
           >
             {isExporting ? (
               <>
-                <span className="animate-spin text-xs">⏳</span>
+                <span className="animate-spin text-sm">⏳</span>
                 <span>匯出中...</span>
               </>
             ) : (
               <>
                 <span>匯出</span>
                 <svg
-                  className={`w-3.5 h-3.5 text-sky-100 transition-transform duration-150 ${
+                  className={`w-4 h-4 text-sky-100 transition-transform duration-150 ${
                     isExportMenuOpen ? 'rotate-180' : ''
                   }`}
                   viewBox="0 0 24 24"
@@ -637,7 +637,7 @@ export const App: React.FC = () => {
           {isExportMenuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full mt-1.5 w-60 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
+              className="absolute right-0 top-full mt-1.5 w-72 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-2 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
             >
               <button
                 type="button"
@@ -647,14 +647,14 @@ export const App: React.FC = () => {
                   setIsExportMenuOpen(false);
                   handleDownloadPptx();
                 }}
-                className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-2.5 cursor-pointer"
+                className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
               >
                 <svg
-                  className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                  className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="1.9"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
@@ -662,9 +662,9 @@ export const App: React.FC = () => {
                   <line x1="8" y1="21" x2="16" y2="21" />
                   <line x1="12" y1="17" x2="12" y2="21" />
                 </svg>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-white">匯出簡報 (.pptx)</span>
-                  <span className="text-[11px] text-slate-400">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-bold text-white">匯出簡報 (.pptx)</span>
+                  <span className="text-xs text-slate-300">
                     {!canExportPptx
                       ? !(alignmentStatus?.valid ?? true)
                         ? `需先修正錯誤：${alignmentStatus?.message}`
@@ -674,7 +674,7 @@ export const App: React.FC = () => {
                 </div>
               </button>
 
-              <div className="my-1 border-t border-slate-800" />
+              <div className="my-1.5 border-t border-slate-800" />
 
               <button
                 type="button"
@@ -684,14 +684,14 @@ export const App: React.FC = () => {
                   setIsExportMenuOpen(false);
                   handleDownloadSource();
                 }}
-                className="px-3.5 py-2 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-2.5 cursor-pointer"
+                className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
               >
                 <svg
-                  className="w-4 h-4 text-slate-300 mt-0.5 shrink-0"
+                  className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="1.8"
+                  strokeWidth="1.9"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
@@ -699,9 +699,9 @@ export const App: React.FC = () => {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-white">匯出原始檔 (.nmn)</span>
-                  <span className="text-[11px] text-slate-400">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-bold text-white">匯出原始檔 (.nmn)</span>
+                  <span className="text-xs text-slate-300">
                     下載旋律與歌詞，供日後匯入編輯
                   </span>
                 </div>
@@ -769,14 +769,14 @@ export const App: React.FC = () => {
           >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-              <div id="error-modal-title" className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+              <div id="error-modal-title" className="flex items-center gap-2 text-amber-400 font-bold text-base">
                 <span className="text-lg">⚠️</span>
                 <span>{alignmentStatus.message}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowErrorModal(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-sm cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition text-base cursor-pointer"
                 title="關閉"
               >
                 ✕
@@ -785,14 +785,14 @@ export const App: React.FC = () => {
 
             {/* Error Details Monospace Block */}
             {alignmentStatus.details && (
-              <div className="bg-amber-950/30 border border-amber-700/60 rounded-xl p-4 font-mono text-xs text-amber-200 whitespace-pre-wrap break-all leading-relaxed max-h-64 overflow-y-auto">
+              <div className="bg-amber-950/30 border border-amber-700/60 rounded-xl p-4 font-mono text-sm text-amber-200 whitespace-pre-wrap break-all leading-relaxed max-h-64 overflow-y-auto">
                 {alignmentStatus.details}
               </div>
             )}
 
             {/* Hint */}
             <div className="pt-1">
-              <span className="text-xs text-slate-400">
+              <span className="text-sm text-slate-300">
                 請依提示調整左側旋律或歌詞，投影片將自動更新。
               </span>
             </div>
