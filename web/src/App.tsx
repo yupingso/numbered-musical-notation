@@ -21,26 +21,54 @@ import {
   spliceMelodyPitch,
   updateLyricsMetadata,
 } from './core/sourceSplicer';
-import { getSongFileStem, parseNmnSource, serializeNmnSource } from './core/sourceFile';
+import {
+  SavedSongFile,
+  createNewSongTemplate,
+  extractDisplayTitle,
+  formatRelativeTime,
+  generateSongFileId,
+  getSongFileStem,
+  isExactExampleSong,
+  loadWorkspaceFromStorage,
+  parseNmnSource,
+  removeSavedSongFile,
+  serializeNmnSource,
+  syncAutoSaveFile,
+} from './core/sourceFile';
 import { EXAMPLE_SONG_01 } from './examples';
 
 export const App: React.FC = () => {
-  const [melodyText, setMelodyText] = useState<string>(() => {
-    return localStorage.getItem('nmn_melody') || EXAMPLE_SONG_01.melody;
-  });
-  const [lyricsText, setLyricsText] = useState<string>(() => {
-    return localStorage.getItem('nmn_lyrics') || EXAMPLE_SONG_01.lyrics;
-  });
+  const [initialWorkspace] = useState(() => loadWorkspaceFromStorage());
+  const [savedFiles, setSavedFiles] = useState<SavedSongFile[]>(
+    () => initialWorkspace.savedFiles
+  );
+  const [activeFileId, setActiveFileId] = useState<string>(
+    () => initialWorkspace.activeFileId
+  );
+  const [melodyText, setMelodyText] = useState<string>(
+    () => initialWorkspace.initialMelody
+  );
+  const [lyricsText, setLyricsText] = useState<string>(
+    () => initialWorkspace.initialLyrics
+  );
+
+  // Track which file IDs originated from the built-in example (initial load or "載入範例")
+  const exampleSessionIdsRef = useRef<Set<string>>(
+    new Set(
+      !initialWorkspace.savedFiles.some((f) => f.id === initialWorkspace.activeFileId) &&
+        isExactExampleSong(initialWorkspace.initialMelody, initialWorkspace.initialLyrics)
+        ? [initialWorkspace.activeFileId]
+        : []
+    )
+  );
 
   const [slidesSvg, setSlidesSvg] = useState<
     { slideIndex: number; sectionTag: string | null; sectionName?: string; svg: string }[]
   >([]);
   const [rawSlides, setRawSlides] = useState<SheetSlide[]>([]);
-  const [metadata, setMetadata] = useState<SongMetadata>(() => {
-    const initMelody = localStorage.getItem('nmn_melody') || EXAMPLE_SONG_01.melody;
-    const initLyrics = localStorage.getItem('nmn_lyrics') || EXAMPLE_SONG_01.lyrics;
-    return parseSongMetadata(initLyrics, initMelody);
-  });
+  const [metadata, setMetadata] = useState<SongMetadata>(() =>
+    parseSongMetadata(initialWorkspace.initialLyrics, initialWorkspace.initialMelody)
+  );
   const [alignmentStatus, setAlignmentStatus] = useState<SlideDeckStatus | null>(null);
 
   const [, startTransition] = useTransition();
@@ -50,13 +78,50 @@ export const App: React.FC = () => {
 
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [songModalMode, setSongModalMode] = useState<'new' | 'fork' | null>(null);
+  const [newSongTitleInput, setNewSongTitleInput] = useState('');
+  const [pendingDeleteFile, setPendingDeleteFile] = useState<SavedSongFile | null>(null);
+
   const importMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const newSongInputRef = useRef<HTMLInputElement>(null);
+  const confirmDeleteBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Focus the title input when the "新增空白簡譜" / "建立副本" modal opens
+  useEffect(() => {
+    if (songModalMode) {
+      const id = requestAnimationFrame(() => {
+        newSongInputRef.current?.focus();
+        newSongInputRef.current?.select();
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [songModalMode]);
+
+  // Focus the confirm button and handle Escape when the "Delete Saved Song" confirmation modal opens
+  useEffect(() => {
+    if (!pendingDeleteFile) return;
+    const id = requestAnimationFrame(() => {
+      confirmDeleteBtnRef.current?.focus();
+    });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setPendingDeleteFile(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [pendingDeleteFile]);
 
   // Close dropdown menus when clicking outside or pressing Escape
   useEffect(() => {
-    if (!isImportMenuOpen && !isExportMenuOpen) return;
+    if ((!isImportMenuOpen && !isExportMenuOpen) || pendingDeleteFile) return;
 
     const handlePointerDown = (e: MouseEvent) => {
       const target = e.target as Node | null;
@@ -91,16 +156,20 @@ export const App: React.FC = () => {
       document.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isImportMenuOpen, isExportMenuOpen]);
+  }, [isImportMenuOpen, isExportMenuOpen, pendingDeleteFile]);
 
-  // Auto-save to localStorage
+  // Synchronous File-Like Auto-Save to localStorage
   useEffect(() => {
-    localStorage.setItem('nmn_melody', melodyText);
-  }, [melodyText]);
-
-  useEffect(() => {
-    localStorage.setItem('nmn_lyrics', lyricsText);
-  }, [lyricsText]);
+    setSavedFiles((prev) =>
+      syncAutoSaveFile({
+        savedFiles: prev,
+        activeFileId,
+        melody: melodyText,
+        lyrics: lyricsText,
+        isExampleSession: exampleSessionIdsRef.current.has(activeFileId),
+      })
+    );
+  }, [activeFileId, melodyText, lyricsText]);
 
   const handleRender = useCallback(() => {
     startTransition(() => {
@@ -142,36 +211,55 @@ export const App: React.FC = () => {
     });
   }, [melodyText, lyricsText]);
 
-  // Undo / Redo history for right-pane and programmatic edits
-  const undoStackRef = useRef<{ melodyText: string; lyricsText: string }[]>([]);
-  const redoStackRef = useRef<{ melodyText: string; lyricsText: string }[]>([]);
+  // Per-file Undo / Redo history for right-pane and programmatic edits
+  const historyByFileRef = useRef<
+    Map<
+      string,
+      {
+        undo: { melodyText: string; lyricsText: string }[];
+        redo: { melodyText: string; lyricsText: string }[];
+      }
+    >
+  >(new Map());
 
-  // Record a snapshot of (melodyText, lyricsText) before applying a right-pane modification
-  const recordHistory = useCallback(() => {
-    undoStackRef.current.push({ melodyText, lyricsText });
-    if (undoStackRef.current.length > 50) {
-      undoStackRef.current.shift();
+  const getActiveFileHistory = useCallback(() => {
+    let entry = historyByFileRef.current.get(activeFileId);
+    if (!entry) {
+      entry = { undo: [], redo: [] };
+      historyByFileRef.current.set(activeFileId, entry);
     }
-    redoStackRef.current = [];
-  }, [melodyText, lyricsText]);
+    return entry;
+  }, [activeFileId]);
+
+  // Record a snapshot of (melodyText, lyricsText) before applying a modification on activeFileId
+  const recordHistory = useCallback(() => {
+    const history = getActiveFileHistory();
+    history.undo.push({ melodyText, lyricsText });
+    if (history.undo.length > 50) {
+      history.undo.shift();
+    }
+    history.redo = [];
+  }, [getActiveFileHistory, melodyText, lyricsText]);
 
   const handleUndo = useCallback(() => {
-    if (undoStackRef.current.length === 0) return;
-    const prev = undoStackRef.current.pop()!;
-    redoStackRef.current.push({ melodyText, lyricsText });
+    const history = getActiveFileHistory();
+    if (history.undo.length === 0) return;
+    const prev = history.undo.pop()!;
+    history.redo.push({ melodyText, lyricsText });
     setMelodyText(prev.melodyText);
     setLyricsText(prev.lyricsText);
     setMetadata(parseSongMetadata(prev.lyricsText, prev.melodyText));
-  }, [melodyText, lyricsText]);
+  }, [getActiveFileHistory, melodyText, lyricsText]);
 
   const handleRedo = useCallback(() => {
-    if (redoStackRef.current.length === 0) return;
-    const next = redoStackRef.current.pop()!;
-    undoStackRef.current.push({ melodyText, lyricsText });
+    const history = getActiveFileHistory();
+    if (history.redo.length === 0) return;
+    const next = history.redo.pop()!;
+    history.undo.push({ melodyText, lyricsText });
     setMelodyText(next.melodyText);
     setLyricsText(next.lyricsText);
     setMetadata(parseSongMetadata(next.lyricsText, next.melodyText));
-  }, [melodyText, lyricsText]);
+  }, [getActiveFileHistory, melodyText, lyricsText]);
 
   // Live render with 150ms debounce
   useEffect(() => {
@@ -277,15 +365,36 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(downloadUrl);
   };
 
-  const handleImportSource = useCallback(
-    (newMelody: string, newLyrics: string) => {
-      recordHistory();
-      setMelodyText(newMelody);
-      setLyricsText(newLyrics);
-      setMetadata(parseSongMetadata(newLyrics, newMelody));
-    },
-    [recordHistory]
-  );
+  const handleSubmitSongModal = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSongTitleInput.trim();
+    if (!trimmed || !songModalMode) return;
+
+    const newId = generateSongFileId();
+    if (songModalMode === 'fork') {
+      const forkedLyrics = updateLyricsMetadata(lyricsText, { title: trimmed });
+      setActiveFileId(newId);
+      setLyricsText(forkedLyrics);
+      setMetadata(parseSongMetadata(forkedLyrics, melodyText));
+    } else {
+      const { melody, lyrics } = createNewSongTemplate(trimmed);
+      setActiveFileId(newId);
+      setMelodyText(melody);
+      setLyricsText(lyrics);
+      setMetadata(parseSongMetadata(lyrics, melody));
+    }
+
+    setSongModalMode(null);
+    setNewSongTitleInput('');
+  };
+
+  const handleImportSource = useCallback((newMelody: string, newLyrics: string) => {
+    const newId = generateSongFileId();
+    setActiveFileId(newId);
+    setMelodyText(newMelody);
+    setLyricsText(newLyrics);
+    setMetadata(parseSongMetadata(newLyrics, newMelody));
+  }, []);
 
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -304,6 +413,29 @@ export const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const handleSelectSavedFile = (file: SavedSongFile) => {
+    setIsImportMenuOpen(false);
+    if (file.id === activeFileId) return;
+    setActiveFileId(file.id);
+    setMelodyText(file.melody);
+    setLyricsText(file.lyrics);
+    setMetadata(parseSongMetadata(file.lyrics, file.melody));
+  };
+
+  const handleRequestDeleteSavedFile = (e: React.MouseEvent, file: SavedSongFile) => {
+    e.stopPropagation();
+    if (file.id === activeFileId) return;
+    setPendingDeleteFile(file);
+  };
+
+  const handleConfirmDeleteSavedFile = () => {
+    if (!pendingDeleteFile) return;
+    if (pendingDeleteFile.id !== activeFileId) {
+      setSavedFiles((prev) => removeSavedSongFile(prev, pendingDeleteFile.id));
+    }
+    setPendingDeleteFile(null);
+  };
+
   const handleUpdateMetadata = useCallback(
     (newMeta: Partial<SongMetadata>) => {
       recordHistory();
@@ -315,7 +447,9 @@ export const App: React.FC = () => {
   );
 
   const handleLoadExample = () => {
-    recordHistory();
+    const newId = generateSongFileId();
+    exampleSessionIdsRef.current.add(newId);
+    setActiveFileId(newId);
     setMelodyText(EXAMPLE_SONG_01.melody);
     setLyricsText(EXAMPLE_SONG_01.lyrics);
     setMetadata(parseSongMetadata(EXAMPLE_SONG_01.lyrics, EXAMPLE_SONG_01.melody));
@@ -465,7 +599,7 @@ export const App: React.FC = () => {
 
       {/* Global Top Bar (Full Width, Modern High-Contrast Royal Navy Header) */}
       <header className="min-h-12 md:h-12 px-4 py-1.5 md:py-0 flex flex-wrap md:flex-nowrap items-center justify-between gap-2 bg-[#0f1f38] border-b-2 border-sky-500/80 shadow-md shrink-0 z-30 relative">
-        {/* Left: Branding & Import Dropdown */}
+        {/* Left: Branding & Import / Song Switcher Dropdown */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
             <img src="./favicon.svg" alt="Logo" className="w-6 h-6 shrink-0 rounded drop-shadow" />
@@ -484,7 +618,7 @@ export const App: React.FC = () => {
               aria-haspopup="menu"
               aria-expanded={isImportMenuOpen}
               className="px-3 py-1.5 bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white text-sm font-semibold rounded-md border border-slate-500 transition flex items-center gap-1.5 select-none shadow-sm cursor-pointer"
-              title="匯入原始檔或載入範例歌曲"
+              title="新增、匯入或切換最近儲存的簡譜"
             >
               <span>匯入</span>
               <svg
@@ -507,6 +641,73 @@ export const App: React.FC = () => {
                 role="menu"
                 className="absolute left-0 mt-1.5 w-80 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-2 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
               >
+                {/* 1. Create Blank Song (新增空白簡譜...) */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsImportMenuOpen(false);
+                    setNewSongTitleInput('');
+                    setSongModalMode('new');
+                  }}
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-3 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4 text-sky-400 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">新增空白簡譜...</span>
+                    <span className="text-xs text-slate-300">
+                      輸入歌名並建立含主歌、副歌標籤的簡譜
+                    </span>
+                  </div>
+                </button>
+
+                {/* 2. Fork Current Song as New File (建立副本...) */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsImportMenuOpen(false);
+                    const currentTitle =
+                      extractDisplayTitle(lyricsText, melodyText) || '未命名簡譜';
+                    setNewSongTitleInput(`${currentTitle} (副本)`);
+                    setSongModalMode('fork');
+                  }}
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 transition flex items-start gap-3 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4 text-sky-300 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">建立副本...</span>
+                    <span className="text-xs text-slate-300">
+                      複製目前簡譜內容並另存為新簡譜
+                    </span>
+                  </div>
+                </button>
+
+                <div className="my-1.5 border-t border-slate-800" />
+
+                {/* 3. Import .nmn Source File */}
                 <button
                   type="button"
                   role="menuitem"
@@ -535,8 +736,7 @@ export const App: React.FC = () => {
                   </div>
                 </button>
 
-                <div className="my-1.5 border-t border-slate-800" />
-
+                {/* 4. Load Built-in Example */}
                 <button
                   type="button"
                   role="menuitem"
@@ -565,6 +765,88 @@ export const App: React.FC = () => {
                     <span className="text-xs text-slate-300">範例歌曲：你真偉大</span>
                   </div>
                 </button>
+
+                <div className="my-1.5 border-t border-slate-700/80" />
+
+                {/* 5. Recently Saved Songs in localStorage */}
+                <div className="px-4 py-1.5 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 tracking-wide">
+                    最近儲存的簡譜
+                  </span>
+                  <span className="text-xs text-slate-400">自動儲存</span>
+                </div>
+
+                {savedFiles.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-slate-300 leading-relaxed">
+                    尚無修改紀錄（新增或修改簡譜後將自動儲存於此）
+                  </div>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto flex flex-col divide-y divide-slate-800/60">
+                    {savedFiles.map((file) => {
+                      const isActive = file.id === activeFileId;
+                      const displayTitle = file.title || '未命名簡譜';
+                      return (
+                        <div
+                          key={file.id}
+                          role="menuitem"
+                          tabIndex={0}
+                          onClick={() => handleSelectSavedFile(file)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleSelectSavedFile(file);
+                            }
+                          }}
+                          className={`px-4 py-2.5 flex items-center justify-between gap-2.5 transition cursor-pointer ${
+                            isActive
+                              ? 'bg-sky-950/50 hover:bg-sky-950/70'
+                              : 'hover:bg-slate-800/90 active:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                isActive ? 'bg-sky-400 shadow-sm shadow-sky-400' : 'bg-slate-500'
+                              }`}
+                            />
+                            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={`text-sm font-bold truncate ${
+                                    isActive ? 'text-sky-200' : 'text-slate-100'
+                                  }`}
+                                  title={displayTitle}
+                                >
+                                  {displayTitle}
+                                </span>
+                                {isActive && (
+                                  <span className="px-1.5 py-0.5 bg-sky-500/20 border border-sky-400/50 text-sky-200 text-xs font-semibold rounded shrink-0">
+                                    編輯中
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-slate-300">
+                                {formatRelativeTime(file.updatedAt)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!isActive && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleRequestDeleteSavedFile(e, file)}
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-sm text-slate-300 hover:text-rose-200 hover:bg-rose-950/80 transition shrink-0 cursor-pointer"
+                              title={`刪除「${displayTitle}」的儲存紀錄`}
+                              aria-label={`刪除 ${displayTitle}`}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -729,6 +1011,7 @@ export const App: React.FC = () => {
         {/* Right Pane: Slide Deck Preview & Syntax Help Overlay */}
         <section className="relative flex-1 md:h-full min-h-[480px] md:min-h-0 overflow-hidden flex flex-col min-w-0">
           <SlideDeckView
+            key={activeFileId}
             slidesSvg={slidesSvg}
             rawSlides={rawSlides}
             status={alignmentStatus}
@@ -753,6 +1036,163 @@ export const App: React.FC = () => {
           )}
         </section>
       </main>
+
+      {/* Create Blank Song / Fork Song Modal */}
+      {songModalMode && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setSongModalMode(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setSongModalMode(null);
+            }
+          }}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-song-modal-title"
+            onSubmit={handleSubmitSongModal}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-600/90 rounded-2xl shadow-2xl max-w-md w-full p-5 relative flex flex-col space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div
+                id="new-song-modal-title"
+                className="flex items-center gap-2 text-white font-bold text-base"
+              >
+                {songModalMode === 'fork' ? (
+                  <svg
+                    className="w-5 h-5 text-sky-400 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-5 h-5 text-sky-400 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                )}
+                <span>{songModalMode === 'fork' ? '建立副本' : '新增空白簡譜'}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSongModalMode(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition text-base cursor-pointer"
+                title="關閉"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col space-y-2">
+              <label
+                htmlFor="new-song-title-input"
+                className="text-sm font-semibold text-slate-200"
+              >
+                請輸入歌曲名稱：
+              </label>
+              <div className="flex items-center gap-2.5">
+                <input
+                  ref={newSongInputRef}
+                  id="new-song-title-input"
+                  type="text"
+                  value={newSongTitleInput}
+                  onChange={(e) => setNewSongTitleInput(e.target.value)}
+                  placeholder="例如：奇異恩典"
+                  className="flex-1 min-w-0 px-3.5 py-2 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-lg text-base text-white placeholder-slate-500 focus:outline-none transition"
+                />
+                <button
+                  type="submit"
+                  disabled={!newSongTitleInput.trim()}
+                  className="px-4 py-2 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg shadow-md border border-sky-400/50 transition shrink-0 cursor-pointer"
+                >
+                  確定
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Delete Saved Song Confirmation Modal */}
+      {pendingDeleteFile && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setPendingDeleteFile(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-song-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-rose-500/70 rounded-2xl shadow-2xl max-w-md w-full p-5 relative flex flex-col space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div
+                id="delete-song-modal-title"
+                className="flex items-center gap-2 text-rose-400 font-bold text-base"
+              >
+                <svg
+                  className="w-5 h-5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>刪除簡譜</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDeleteFile(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition text-base cursor-pointer"
+                title="關閉"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-0.5">
+              <p className="text-sm text-slate-100 leading-relaxed min-w-0 break-words">
+                確定要刪除「
+                <span className="font-bold text-white">
+                  {pendingDeleteFile.title || '未命名簡譜'}
+                </span>
+                」嗎？
+              </p>
+              <button
+                ref={confirmDeleteBtnRef}
+                type="button"
+                onClick={handleConfirmDeleteSavedFile}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white text-sm font-bold rounded-lg shadow-md border border-rose-400/50 transition shrink-0 cursor-pointer"
+              >
+                確定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Details Modal */}
       {showErrorModal && alignmentStatus && !alignmentStatus.valid && (

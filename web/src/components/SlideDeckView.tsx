@@ -306,9 +306,13 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
   }, [slidesSvg, metadata]);
 
   const totalSlides = allSlides.length;
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(1);
-  const [pageInput, setPageInput] = useState('2');
-  const [hasAutoAdvanced, setHasAutoAdvanced] = useState(false);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(() =>
+    slidesSvg.length > 0 ? 1 : 0
+  );
+  const [pageInput, setPageInput] = useState(() =>
+    slidesSvg.length > 0 ? '2' : '1'
+  );
+  const [hasAutoAdvanced, setHasAutoAdvanced] = useState(() => slidesSvg.length > 0);
 
   // Unit selection state
   const [selectedUnit, setSelectedUnit] = useState<SelectedUnitContext | null>(null);
@@ -608,7 +612,8 @@ export const SlideDeckView: React.FC<SlideDeckViewProps> = ({
     }
   }, [currentSlideIndex]);
 
-  const currentSlide = allSlides[currentSlideIndex];
+  const safeSlideIndex = Math.min(currentSlideIndex, Math.max(0, totalSlides - 1));
+  const currentSlide = allSlides[safeSlideIndex] ?? allSlides[0];
 
   return (
     <div

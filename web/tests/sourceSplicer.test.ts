@@ -1089,6 +1089,143 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
       );
     });
   });
+
+  describe('Multi-Song File-Like Auto-Save & Workspace', () => {
+    it('EXAMPLE_SONG_01 contains <title> 你真偉大 and parses cleanly with 0 errors', async () => {
+      const { EXAMPLE_SONG_01 } = await import('../src/examples');
+      expect(EXAMPLE_SONG_01.lyrics.startsWith('<title> 你真偉大\n')).toBe(true);
+      const ast = parseClassicSong(EXAMPLE_SONG_01.melody, EXAMPLE_SONG_01.lyrics);
+      expect(ast.errors ?? []).toEqual([]);
+      expect(ast.metadata?.title).toBe('你真偉大');
+    });
+
+    it('creates pre-filled template with <title>, <tag> 主歌, and <tag> 副歌', async () => {
+      const { createNewSongTemplate } = await import('../src/core/sourceFile');
+      const tpl = createNewSongTemplate('奇異恩典');
+      expect(tpl.melody).toBe('<key> C\n<time> 4/4\n\n');
+      expect(tpl.lyrics).toContain('<title> 奇異恩典');
+      expect(tpl.lyrics).toContain('<tag> 主歌');
+      expect(tpl.lyrics).toContain('<tag> 副歌');
+    });
+
+    it('guards untouched EXAMPLE_SONG_01 and cleans up zombie entry if undone back to exact example', async () => {
+      const { EXAMPLE_SONG_01 } = await import('../src/examples');
+      const { syncAutoSaveFile } = await import('../src/core/sourceFile');
+
+      const map = new Map<string, string>();
+      const mockStorage = {
+        getItem: (k: string) => map.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          map.set(k, v);
+        },
+      };
+
+      // 1. Untouched example does not save an entry
+      let files = syncAutoSaveFile({
+        savedFiles: [],
+        activeFileId: 'file_example_1',
+        melody: EXAMPLE_SONG_01.melody,
+        lyrics: EXAMPLE_SONG_01.lyrics,
+        now: 1000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(0);
+
+      // 2. Modifying example saves it under file_example_1
+      const modifiedLyrics = EXAMPLE_SONG_01.lyrics.replace('<title> 你真偉大', '<title> 你真偉大 (G調)');
+      files = syncAutoSaveFile({
+        savedFiles: files,
+        activeFileId: 'file_example_1',
+        melody: EXAMPLE_SONG_01.melody,
+        lyrics: modifiedLyrics,
+        now: 2000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(1);
+      expect(files[0].id).toBe('file_example_1');
+      expect(files[0].title).toBe('你真偉大 (G調)');
+
+      // 3. Undoing back to exact EXAMPLE_SONG_01 removes file_example_1 (zombie cleanup)
+      files = syncAutoSaveFile({
+        savedFiles: files,
+        activeFileId: 'file_example_1',
+        melody: EXAMPLE_SONG_01.melody,
+        lyrics: EXAMPLE_SONG_01.lyrics,
+        now: 3000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(0);
+    });
+
+    it('updates file in-place when editing <title> without creating ghost slots or overwriting other songs', async () => {
+      const { syncAutoSaveFile } = await import('../src/core/sourceFile');
+      const map = new Map<string, string>();
+      const mockStorage = {
+        getItem: (k: string) => map.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          map.set(k, v);
+        },
+      };
+
+      // Song A is created and edited incrementally
+      let files = syncAutoSaveFile({
+        savedFiles: [],
+        activeFileId: 'file_A',
+        melody: '<key> C\n1 2 3 4',
+        lyrics: '<title> 奇\n<tag> 主歌\n奇異恩典',
+        now: 1000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(1);
+      expect(files[0].title).toBe('奇');
+
+      files = syncAutoSaveFile({
+        savedFiles: files,
+        activeFileId: 'file_A',
+        melody: '<key> C\n1 2 3 4',
+        lyrics: '<title> 奇異恩典\n<tag> 主歌\n奇異恩典',
+        now: 2000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(1);
+      expect(files[0].id).toBe('file_A');
+      expect(files[0].title).toBe('奇異恩典');
+
+      // Song B is created with the SAME title (or untitled) — never overwrites Song A
+      files = syncAutoSaveFile({
+        savedFiles: files,
+        activeFileId: 'file_B',
+        melody: '<key> G\n5 6 7 1',
+        lyrics: '<title> 奇異恩典\n<tag> 主歌\n另一版本',
+        now: 3000,
+        storage: mockStorage,
+      });
+      expect(files).toHaveLength(2);
+      expect(files[0].id).toBe('file_B');
+      expect(files[1].id).toBe('file_A');
+    });
+
+    it('migrates legacy nmn_melody and nmn_lyrics into nmn_saved_files on first load', async () => {
+      const { loadWorkspaceFromStorage, STORAGE_KEY_FILES } = await import('../src/core/sourceFile');
+      const map = new Map<string, string>([
+        ['nmn_melody', '<key> D\n<time> 4/4\n1 2 3 5'],
+        ['nmn_lyrics', '<title> 讚美之泉\n<tag> 主歌\n從天父而來的愛'],
+      ]);
+      const mockStorage = {
+        getItem: (k: string) => map.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          map.set(k, v);
+        },
+      };
+
+      const workspace = loadWorkspaceFromStorage(mockStorage);
+      expect(workspace.savedFiles).toHaveLength(1);
+      expect(workspace.savedFiles[0].title).toBe('讚美之泉');
+      expect(workspace.initialMelody).toBe('<key> D\n<time> 4/4\n1 2 3 5');
+      expect(map.get(STORAGE_KEY_FILES)).toBeTruthy();
+    });
+  });
 });
+
 
 
