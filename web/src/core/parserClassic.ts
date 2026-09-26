@@ -11,6 +11,7 @@ import {
   SongAST,
   SongMetadata,
   SourceSpan,
+  TimeSignature,
   UnitSegment,
 } from './types';
 
@@ -252,6 +253,8 @@ export class ClassicSongParser {
   slurStartsAtLeadingNote = true;
   group8thNotes = false;
   errors: string[] = [];
+  /** Complete triplet that each melody note belongs to, found by groupTriplets(). */
+  tripletOf = new Map<Note, Note[]>();
 
   appendTimeSignature(time: ParsedTime, s: string, offsetMap?: number[]) {
     if (!time) throw new Error('Unknown <time>');
@@ -844,10 +847,58 @@ export class ClassicSongParser {
     return groups;
   }
 
+  /**
+   * Groups triplet notes over the whole melody, ignoring lyric line breaks.
+   *
+   * A group ends when a beat group starts, when the triplet duration changes, or
+   * when it already has 3 notes. Groups with fewer than 3 notes are melody errors.
+   * Complete groups are recorded in tripletOf, so that groupUnderlines() can
+   * detect triplets split by a line break.
+   */
+  groupTriplets() {
+    const groups: Note[][] = [];
+    let tripletDuration: Fraction | null = null;
+
+    for (const [time, startBeat, notes] of this.melody) {
+      let beat = startBeat;
+      for (const note of notes) {
+        const newGroup = isBeatGroupStart(time, beat);
+        if (newGroup) {
+          tripletDuration = null;
+        }
+        if (note.duration.den % 3 === 0) {
+          const last = groups[groups.length - 1];
+          if (
+            newGroup ||
+            last === undefined ||
+            !note.duration.equals(tripletDuration ?? 0) ||
+            last.length === 3
+          ) {
+            groups.push([note]);
+          } else {
+            last.push(note);
+          }
+          tripletDuration = note.duration;
+        }
+        beat = beat.add(note.duration);
+      }
+    }
+
+    for (const group of groups) {
+      if (group.length !== 3) {
+        this.errors.push('triplet with less than 3 notes');
+        continue;
+      }
+      for (const note of group) {
+        this.tripletOf.set(note, group);
+      }
+    }
+  }
+
   groupUnderlines(line: OutputLine) {
     const underlinesList: NodeRange[][] = [[]]; // depth 0 unused
-    const rawTriplets: number[][] = [];
-    let tripletDuration: Fraction | null = null;
+    // Node indices on this line of each complete triplet, in line order
+    const tripletNodes = new Map<Note[], number[]>();
 
     for (let bIdx = 0; bIdx < line.bars.length; bIdx++) {
       const bar = line.bars[bIdx];
@@ -876,30 +927,17 @@ export class ClassicSongParser {
         }
         const specialGroup = groupIdx < specialGroups.length ? specialGroups[groupIdx] : null;
 
-        let newGroup = false;
-        if (
-          (bar.time.lower === 4 && beat.toNumber() % 1 === 0) ||
-          (bar.time.lower === 8 && beat.toNumber() % 1.5 === 0)
-        ) {
-          newGroup = true;
-        }
+        const newGroup = isBeatGroupStart(bar.time, beat);
 
         // Triplet handling
-        if (newGroup) {
-          tripletDuration = null;
-        }
-        if (note.duration.den % 3 === 0) {
-          if (newGroup || rawTriplets.length === 0 || !note.duration.equals(tripletDuration ?? 0)) {
-            if (rawTriplets.length > 0 && rawTriplets[rawTriplets.length - 1].length !== 3) {
-              this.errors.push('triplet with less than 3 notes');
-            }
-            rawTriplets.push([idx]);
-          } else if (rawTriplets[rawTriplets.length - 1].length === 3) {
-            rawTriplets.push([idx]);
+        const triplet = this.tripletOf.get(note);
+        if (triplet) {
+          const idxs = tripletNodes.get(triplet);
+          if (idxs) {
+            idxs.push(idx);
           } else {
-            rawTriplets[rawTriplets.length - 1].push(idx);
+            tripletNodes.set(triplet, [idx]);
           }
-          tripletDuration = note.duration;
         }
 
         // Underline handling
@@ -929,15 +967,25 @@ export class ClassicSongParser {
       }
     }
 
-    if (rawTriplets.length > 0 && rawTriplets[rawTriplets.length - 1].length !== 3) {
-      this.errors.push('triplet with less than 3 notes');
-    }
-
     line.underlinesList = underlinesList;
-    line.triplets = rawTriplets
-      .filter((t) => t.length === 3)
-      .map((t) => ({ start: t[0], middle: t[1], end: t[2] }));
+    line.triplets = [];
+    for (const idxs of tripletNodes.values()) {
+      if (idxs.length === 3) {
+        line.triplets.push({ start: idxs[0], middle: idxs[1], end: idxs[2] });
+      } else {
+        // A lyric line break splits this triplet
+        this.errors.push('triplet with less than 3 notes');
+      }
+    }
   }
+}
+
+/** Whether a new beat group (for underlines and triplets) starts at this beat. */
+function isBeatGroupStart(time: TimeSignature, beat: Fraction): boolean {
+  return (
+    (time.lower === 4 && beat.toNumber() % 1 === 0) ||
+    (time.lower === 8 && beat.toNumber() % 1.5 === 0)
+  );
 }
 
 export const IGNORED_LYRIC_CHARS = ' ,.!?　。，、！？;；:：';
@@ -1025,6 +1073,7 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
   }
   parser.makeTiesConsistent();
   parser.trySplitNotes();
+  parser.groupTriplets();
 
   // Parse lyrics
   let lyricOffset = 0;

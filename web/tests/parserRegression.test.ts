@@ -131,3 +131,29 @@ describe('parseClassicSong with real songs in repo', () => {
     expect(matchedLyrics).toEqual(['一', '二', '三', '四']);
   });
 });
+
+describe('triplets', () => {
+  const header = '<key> C\n<time> 4/4\n';
+
+  it('accepts a complete triplet on one line', () => {
+    const ast = parseClassicSong(header + '| [123]_/3 4 5 6 |', '<tag> A\n一二三四五六');
+    expect(ast.errors).toBeUndefined();
+    expect(ast.sections[0].lines[0].triplets).toEqual([{ start: 0, middle: 1, end: 2 }]);
+  });
+
+  it('accepts a triplet written across two brackets', () => {
+    const ast = parseClassicSong(header + '| [12]/3 [3]/3 4 5 6 |', '<tag> A\n一二三四五六');
+    expect(ast.errors).toBeUndefined();
+  });
+
+  it('rejects an incomplete triplet in the melody', () => {
+    const ast = parseClassicSong(header + '| [12]_/3 3 4 5 |', '<tag> A\n一二三四五');
+    expect(ast.errors).toEqual(['triplet with less than 3 notes']);
+  });
+
+  it('rejects a lyric line break inside a triplet', () => {
+    // Reported once by each line that holds part of the triplet.
+    const ast = parseClassicSong(header + '| [123]_/3 4 5 6 |', '<tag> A\n一二\n三四五六');
+    expect(ast.errors).toEqual(['triplet with less than 3 notes', 'triplet with less than 3 notes']);
+  });
+});
