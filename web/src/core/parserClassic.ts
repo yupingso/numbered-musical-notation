@@ -15,6 +15,13 @@ import {
   TripletRange,
   UnitSegment,
 } from './types';
+import {
+  DiagnosticCode,
+  DiagnosticError,
+  DiagnosticSink,
+  formatDiagnostic,
+  makeDiagnostic,
+} from './diagnostics';
 
 export type KeySignature = 'solfa' | [number, number]; // [pitch (1-7), accidental (-1, 0, 1)]
 
@@ -55,7 +62,7 @@ export function getKeyScale(key: [number, number]): number[] {
 
 export function parseKey(s: string): KeySignature {
   s = s.trim();
-  if (!s) throw new Error('Empty key');
+  if (!s) throw new DiagnosticError(makeDiagnostic(DiagnosticCode.KeyEmpty));
   if (s === 'solfa') return 'solfa';
 
   const sym2key: Record<string, [number, number]> = {};
@@ -72,11 +79,11 @@ export function parseKey(s: string): KeySignature {
 
   if (/\d/.test(s)) {
     if (s.length === 1) {
-      if (s[0] !== '0') throw new Error(`Wrong format for <key> ${s}`);
+      if (s[0] !== '0') throw new DiagnosticError(makeDiagnostic(DiagnosticCode.KeyFormat, { key: s }));
       return [1, 0];
     }
     if (s.length !== 2 || !'01234567'.includes(s[0]) || !'#$'.includes(s[1])) {
-      throw new Error(`Wrong format for <key> ${s}`);
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.KeyFormat, { key: s }));
     }
     const x = s[1] === '#' ? 1 : -1;
     return sym2key[`${parseInt(s[0], 10)},${x}`];
@@ -92,14 +99,14 @@ export function parseKey(s: string): KeySignature {
       G: 5,
     };
     if (!(pitchChar in pitchDict)) {
-      throw new Error(`Wrong format for <key> ${s}`);
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.KeyFormat, { key: s }));
     }
     const pitch = pitchDict[pitchChar];
     let tmp = 0;
     if (s.length === 2) {
       if (s[0] === '#') tmp = 1;
       else if (s[0] === '$') tmp = -1;
-      else throw new Error(`Wrong format for <key> ${s}`);
+      else throw new DiagnosticError(makeDiagnostic(DiagnosticCode.KeyFormat, { key: s }));
     }
     return [pitch, tmp];
   }
@@ -112,18 +119,18 @@ export function parseTime(s: string): ParsedTime {
   if (parts.length > 1) {
     let hStr = parts[1].replace(/\s+/g, '');
     if (!hStr.startsWith('hyphen=')) {
-      throw new Error(`Wrong format for <time> ${s}`);
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.TimeFormat, { time: s }));
     }
     hStr = hStr.slice(7);
     if (!['4', '8', '16'].includes(hStr)) {
-      throw new Error('Only hyphen=[4,8,16] is allowed');
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.TimeHyphenValue));
     }
     hyphen = parseInt(hStr, 10);
   }
 
   const timeParts = parts[0].replace(/\s+/g, '').split('/');
   if (timeParts.length !== 2) {
-    throw new Error(`Wrong format for <time> ${s}`);
+    throw new DiagnosticError(makeDiagnostic(DiagnosticCode.TimeFormat, { time: s }));
   }
 
   const upper = timeParts[0] === '?' ? 0 : parseInt(timeParts[0], 10);
@@ -140,10 +147,10 @@ export function parseTime(s: string): ParsedTime {
     [0, 8],
   ];
   if (!allowed.some(([u, l]) => u === upper && l === lower)) {
-    throw new Error(`Unrecognizable <time> ${upper}/${lower}`);
+    throw new DiagnosticError(makeDiagnostic(DiagnosticCode.TimeUnrecognized, { upper, lower }));
   }
   if (hyphen !== undefined && hyphen < lower) {
-    throw new Error(`Hyphen must >= ${lower} for <time> ${upper}/${lower}`);
+    throw new DiagnosticError(makeDiagnostic(DiagnosticCode.TimeHyphenTooSmall, { upper, lower }));
   }
 
   return { upper, lower, hyphen };
@@ -191,7 +198,7 @@ export function parsePitch(
 
   const match = s.match(/^([#$%]?)([0-9a-zA-Z])([',]*)$/);
   if (!match) {
-    throw new Error(`Wrong format for pitch ${s}`);
+    throw new DiagnosticError(makeDiagnostic(DiagnosticCode.PitchFormat, { pitch: s }));
   }
 
   let acc: Accidental | null = accDict[match[1]];
@@ -216,7 +223,7 @@ export function parsePitch(
       name = extendedLowerNameDict[nameStr];
       octave -= 1;
     } else {
-      throw new Error(`'${s}' is not allowed in <key> solfa`);
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.PitchNotInSolfa, { pitch: s }));
     }
   } else {
     if ('1234567'.includes(nameStr)) {
@@ -227,7 +234,7 @@ export function parsePitch(
       name = extendedUpperNameDict[nameStr];
       octave += 1;
     } else {
-      throw new Error(`'${nameStr}' is not allowed in key ${key}`);
+      throw new DiagnosticError(makeDiagnostic(DiagnosticCode.PitchNotInKey, { name: nameStr, key: String(key) }));
     }
 
     const scale = getKeyScale(key);
@@ -253,7 +260,7 @@ export class ClassicSongParser {
   lyricsSpans: Array<[string, SourceSpan[][]]> = [];
   slurStartsAtLeadingNote = true;
   group8thNotes = false;
-  errors: string[] = [];
+  diagnostics = new DiagnosticSink();
   /** Complete triplet that each melody note belongs to, found by groupTriplets(). */
   tripletOf = new Map<Note, Note[]>();
 
@@ -295,7 +302,7 @@ export class ClassicSongParser {
           (durationStr.match(/_/g) || []).length;
 
         if (dashes > 0 && underlines > 0) {
-          this.errors.push(`Wrong format for bar notes ${bar}`);
+          this.diagnostics.report(DiagnosticCode.DashesWithUnderlines, { bar });
         }
 
         let triplet = new Fraction(1);
@@ -315,7 +322,7 @@ export class ClassicSongParser {
               .mul(triplet);
           } else {
             if (dots > 0 || underlines > 0 || !triplet.equals(1)) {
-              this.errors.push('Dots, underlines and triplets are not allowed without brackets in hyphenated time');
+              this.diagnostics.report(DiagnosticCode.HyphenTimeNeedsBrackets);
             }
             duration = new Fraction(dashes + 1, Math.floor(time.hyphen / 4));
             dashesFinal = null;
@@ -343,8 +350,9 @@ export class ClassicSongParser {
           let octave: number;
           try {
             [acc, name, octave] = parsePitch(this.key, pitch);
-          } catch (err: any) {
-            this.errors.push(err?.message || `Wrong format for pitch ${pitch}`);
+          } catch (err) {
+            if (!(err instanceof DiagnosticError)) throw err;
+            this.diagnostics.add(err.diagnostic);
             continue;
           }
           const tie: [boolean, boolean] = [tie0, tie1];
@@ -406,7 +414,7 @@ export class ClassicSongParser {
       }
 
       if (matchedLen !== bar.length) {
-        this.errors.push(`Wrong format for bar '${bar}'`);
+        this.diagnostics.report(DiagnosticCode.BarFormat, { bar });
       }
       if (noteList.length === 0) continue;
 
@@ -444,7 +452,11 @@ export class ClassicSongParser {
           const subDuration = remainingDuration.lessThan(timeCap) ? remainingDuration : timeCap;
 
           if (!time.hyphen && !subDuration.equals(remainingDuration)) {
-            this.errors.push(`Note ${note.toPitchString()} goes beyond one bar in time ${time.upper}/${time.lower}`);
+            this.diagnostics.report(DiagnosticCode.NoteBeyondBar, {
+              note: note.toPitchString(),
+              upper: time.upper,
+              lower: time.lower,
+            });
           }
 
           const subNote = note.copy();
@@ -499,7 +511,7 @@ export class ClassicSongParser {
     let prevNote: Note | null = null;
     for (const [, , notes] of this.melody) {
       if (notes.length === 0) {
-        this.errors.push('Empty bar in melody');
+        this.diagnostics.report(DiagnosticCode.EmptyBar);
         continue;
       }
       for (const note of notes) {
@@ -511,7 +523,7 @@ export class ClassicSongParser {
             (note.acc ?? 0) !== (prevNote.acc ?? 0) ||
             note.octave !== prevNote.octave
           ) {
-            this.errors.push('Tie (~) in melody must connect notes of the same pitch');
+            this.diagnostics.report(DiagnosticCode.TieDifferentPitch);
             prevNote.tie[1] = false;
             note.tie[0] = false;
           } else {
@@ -533,7 +545,7 @@ export class ClassicSongParser {
       splitSections[sumLen] = tag;
       for (const s of lyricsList) {
         if (s.startsWith('~')) {
-          this.errors.push(`A line of lyrics cannot start with '~' (${s})`);
+          this.diagnostics.report(DiagnosticCode.LyricLineStartsWithTilde, { line: s });
         }
         splitLines.add(sumLen);
         sumLen += Array.from(s).length;
@@ -619,7 +631,7 @@ export class ClassicSongParser {
               splitLines.has(lyricsIdx + 1)
             ) {
               if (potentialSlurStartLineNodeIdx === null) {
-                this.errors.push('Start note of slur not found');
+                this.diagnostics.report(DiagnosticCode.SlurStartNotFound);
               } else {
                 slurs.push({
                   start: potentialSlurStartLineNodeIdx,
@@ -759,7 +771,11 @@ export class ClassicSongParser {
     }
 
     if (totalNotesToMatchLyrics !== numWords) {
-      this.errors.push(`${totalNotesToMatchLyrics} notes != ${numWords} words`);
+      const code =
+        totalNotesToMatchLyrics > numWords
+          ? DiagnosticCode.MoreNotesThanWords
+          : DiagnosticCode.MoreWordsThanNotes;
+      this.diagnostics.report(code, { notes: totalNotesToMatchLyrics, words: numWords });
     }
 
     for (const section of sections) {
@@ -887,7 +903,7 @@ export class ClassicSongParser {
 
     for (const group of groups) {
       if (group.length !== 3) {
-        this.errors.push('triplet with less than 3 notes');
+        this.diagnostics.report(DiagnosticCode.IncompleteTriplet);
         continue;
       }
       for (const note of group) {
@@ -972,8 +988,7 @@ export class ClassicSongParser {
     line.triplets = [...tripletRanges.values()];
     for (const range of line.triplets) {
       if (range.start === undefined || range.end === undefined) {
-        // A lyric line break splits this triplet
-        this.errors.push('triplet with less than 3 notes');
+        this.diagnostics.report(DiagnosticCode.TripletSplitByLine);
       }
     }
   }
@@ -1018,17 +1033,18 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
     if (line.startsWith('<key>')) {
       if (parser.key && parser.melody.length > 0) {
-        parser.errors.push('Only one <key> is allowed');
+        parser.diagnostics.report(DiagnosticCode.KeyRepeated);
       }
       try {
         parser.key = parseKey(line.slice(5).trim());
-      } catch (err: any) {
-        parser.errors.push(err?.message || `Wrong format for <key>`);
+      } catch (err) {
+        if (!(err instanceof DiagnosticError)) throw err;
+        parser.diagnostics.add(err.diagnostic);
       }
     } else if (line.startsWith('<time>')) {
       if (s) {
         if (!time) {
-          parser.errors.push('Missing <time> before notes (defaulting to 4/4)');
+          parser.diagnostics.report(DiagnosticCode.TimeMissingBeforeNotes);
           time = { upper: 4, lower: 4 };
         }
         parser.appendTimeSignature(time, s, sOffsetMap);
@@ -1037,8 +1053,9 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
       }
       try {
         time = parseTime(line.slice(6).trim());
-      } catch (err: any) {
-        parser.errors.push(err?.message || `Wrong format for <time>`);
+      } catch (err) {
+        if (!(err instanceof DiagnosticError)) throw err;
+        parser.diagnostics.add(err.diagnostic);
         if (!time) time = { upper: 4, lower: 4 };
       }
       s = '';
@@ -1070,7 +1087,7 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
   if (time) {
     parser.appendTimeSignature(time, s, sOffsetMap);
   } else if (s) {
-    parser.errors.push('Missing <time> (defaulting to 4/4)');
+    parser.diagnostics.report(DiagnosticCode.TimeMissing);
     parser.appendTimeSignature({ upper: 4, lower: 4 }, s, sOffsetMap);
   }
   parser.makeTiesConsistent();
@@ -1141,13 +1158,15 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
   const keyDisplay = typeof parser.key === 'string' ? parser.key : `1=${['C', 'D', 'E', 'F', 'G', 'A', 'B'][parser.key[0] - 1]}`;
   const firstTime = parser.melody[0]?.[0] || { upper: 4, lower: 4 };
+  const diagnostics = parser.diagnostics.diagnostics;
 
   return {
     key: keyDisplay,
     time: firstTime,
     sections,
     metadata,
-    errors: parser.errors.length > 0 ? parser.errors : undefined,
+    errors: diagnostics.length > 0 ? diagnostics.map(formatDiagnostic) : undefined,
+    diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
   };
 }
 

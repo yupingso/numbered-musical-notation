@@ -2,6 +2,8 @@
  * Core data types and AST representations for Numbered Musical Notation (简谱).
  */
 
+import type { Diagnostic } from './diagnostics';
+
 export class Fraction {
   readonly num: number;
   readonly den: number;
@@ -354,7 +356,10 @@ export interface SongAST {
   time: TimeSignature;
   sections: Section[];
   metadata?: SongMetadata;
+  /** English messages of the diagnostics, in the same order. */
   errors?: string[];
+  /** Problems found while parsing, in the order found. */
+  diagnostics?: Diagnostic[];
 }
 
 export interface SheetSlide {

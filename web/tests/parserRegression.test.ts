@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parsePitch, parseTime, parseClassicSong, KeySignature } from '../src/core/parserClassic';
 import { Note, Accidental } from '../src/core/types';
+import { DiagnosticCode, DiagnosticError } from '../src/core/diagnostics';
 
 describe('parsePitch', () => {
   const pitchKeyDict: Record<string, number> = {
@@ -67,6 +68,21 @@ describe('parseTime', () => {
     expect(() => parseTime('4/?')).toThrow();
     expect(() => parseTime('6/8 hyphen=4')).toThrow();
     expect(() => parseTime('4/4 hyphen=9')).toThrow();
+  });
+
+  it('throws a DiagnosticError with a code and the English message', () => {
+    let error: unknown;
+    try {
+      parseTime('5/4');
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(DiagnosticError);
+    expect((error as DiagnosticError).diagnostic).toEqual({
+      code: DiagnosticCode.TimeUnrecognized,
+      params: { upper: 5, lower: 4 },
+    });
+    expect((error as DiagnosticError).message).toBe('Unrecognizable <time> 5/4');
   });
 });
 
@@ -149,12 +165,17 @@ describe('triplets', () => {
   it('rejects an incomplete triplet in the melody', () => {
     const ast = parseClassicSong(header + '| [12]_/3 3 4 5 |', '<tag> A\n一二三四五');
     expect(ast.errors).toEqual(['triplet with less than 3 notes']);
+    expect(ast.diagnostics?.map((d) => d.code)).toEqual([DiagnosticCode.IncompleteTriplet]);
   });
 
   it('rejects a lyric line break inside a triplet', () => {
     // Reported once by each line that holds part of the triplet.
     const ast = parseClassicSong(header + '| [123]_/3 4 5 6 |', '<tag> A\n一二\n三四五六');
     expect(ast.errors).toEqual(['triplet with less than 3 notes', 'triplet with less than 3 notes']);
+    expect(ast.diagnostics?.map((d) => d.code)).toEqual([
+      DiagnosticCode.TripletSplitByLine,
+      DiagnosticCode.TripletSplitByLine,
+    ]);
     // Each line still gets its part of the triplet, for drawing.
     expect(ast.sections[0].lines.map((l) => l.triplets)).toEqual([[{ start: 0, middle: 1 }], [{ end: 0 }]]);
   });
