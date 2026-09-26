@@ -155,5 +155,12 @@ describe('triplets', () => {
     // Reported once by each line that holds part of the triplet.
     const ast = parseClassicSong(header + '| [123]_/3 4 5 6 |', '<tag> A\n一二\n三四五六');
     expect(ast.errors).toEqual(['triplet with less than 3 notes', 'triplet with less than 3 notes']);
+    // Each line still gets its part of the triplet, for drawing.
+    expect(ast.sections[0].lines.map((l) => l.triplets)).toEqual([[{ start: 0, middle: 1 }], [{ end: 0 }]]);
+  });
+
+  it('gives each line its part of a triplet split twice', () => {
+    const ast = parseClassicSong(header + '| [123]_/3 4 5 6 |', '<tag> A\n一\n二\n三四五六');
+    expect(ast.sections[0].lines.map((l) => l.triplets)).toEqual([[{ start: 0 }], [{ middle: 0 }], [{ end: 0 }]]);
   });
 });

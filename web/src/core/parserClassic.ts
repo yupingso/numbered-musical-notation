@@ -12,6 +12,7 @@ import {
   SongMetadata,
   SourceSpan,
   TimeSignature,
+  TripletRange,
   UnitSegment,
 } from './types';
 
@@ -897,8 +898,8 @@ export class ClassicSongParser {
 
   groupUnderlines(line: OutputLine) {
     const underlinesList: NodeRange[][] = [[]]; // depth 0 unused
-    // Node indices on this line of each complete triplet, in line order
-    const tripletNodes = new Map<Note[], number[]>();
+    // The part on this line of each complete triplet, in line order
+    const tripletRanges = new Map<Note[], TripletRange>();
 
     for (let bIdx = 0; bIdx < line.bars.length; bIdx++) {
       const bar = line.bars[bIdx];
@@ -932,12 +933,12 @@ export class ClassicSongParser {
         // Triplet handling
         const triplet = this.tripletOf.get(note);
         if (triplet) {
-          const idxs = tripletNodes.get(triplet);
-          if (idxs) {
-            idxs.push(idx);
-          } else {
-            tripletNodes.set(triplet, [idx]);
+          let range = tripletRanges.get(triplet);
+          if (!range) {
+            range = {};
+            tripletRanges.set(triplet, range);
           }
+          range[TRIPLET_PARTS[triplet.indexOf(note)]] = idx;
         }
 
         // Underline handling
@@ -968,17 +969,18 @@ export class ClassicSongParser {
     }
 
     line.underlinesList = underlinesList;
-    line.triplets = [];
-    for (const idxs of tripletNodes.values()) {
-      if (idxs.length === 3) {
-        line.triplets.push({ start: idxs[0], middle: idxs[1], end: idxs[2] });
-      } else {
+    line.triplets = [...tripletRanges.values()];
+    for (const range of line.triplets) {
+      if (range.start === undefined || range.end === undefined) {
         // A lyric line break splits this triplet
         this.errors.push('triplet with less than 3 notes');
       }
     }
   }
 }
+
+/** TripletRange field for each note of a triplet, in melody order. */
+const TRIPLET_PARTS = ['start', 'middle', 'end'] as const;
 
 /** Whether a new beat group (for underlines and triplets) starts at this beat. */
 function isBeatGroupStart(time: TimeSignature, beat: Fraction): boolean {

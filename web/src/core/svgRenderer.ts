@@ -6,6 +6,7 @@ import {
   SheetSlide,
   Accidental,
   SongMetadata,
+  TripletRange,
 } from './types';
 
 interface CurveLayout {
@@ -13,7 +14,7 @@ interface CurveLayout {
   end: number;
   isTie?: boolean;
   isTriplet?: boolean;
-  tripletMiddle?: number;
+  triplet?: TripletRange;
   hidden: boolean;
   disY: number;
   disX: number;
@@ -296,11 +297,12 @@ export class SvgRenderer {
       curves.push({ start: slur.start, end: slur.end, hidden: false, disY: 0, disX: 0 });
     }
     for (const trip of line.triplets) {
+      // A side of the triplet on another line extends past this line's edge.
       curves.push({
-        start: trip.start,
-        end: trip.end,
+        start: trip.start ?? -1,
+        end: trip.end ?? nodes.length,
         isTriplet: true,
-        tripletMiddle: trip.middle,
+        triplet: trip,
         hidden: false,
         disY: 0,
         disX: 0,
@@ -317,51 +319,70 @@ export class SvgRenderer {
 
     for (const c of curves) {
       if (c.hidden) continue;
-      const x1 = scaledNodePositions[c.start];
-      const x2 = scaledNodePositions[c.end];
       const shiftX = c.disX * scale;
       const startY = nodeNorthY - c.disY * ptToPx;
 
-      if (c.isTriplet && c.tripletMiddle !== undefined) {
+      if (c.isTriplet && c.triplet) {
         // Draw triplet bracket matching TikZ tie0 & tie1:
         // In TikZ (src/writer.py line 266): \node[above of=a{middle},node distance={dis_y_middle}pt] (tri)
         // Center of note a{middle} is at -noteFontSize * 0.35
-        const tripMidX = scaledNodePositions[c.tripletMiddle];
+        // A lyric line break may leave only part of the triplet on this line. Each
+        // half-arc is drawn with its outer note, and the "3" with the middle note.
+        // Without the middle note, a half-arc ends where the "3" would be, one note
+        // step (10 in calculateLineLayout) from its outer note. Such a half-arc uses
+        // the horizontal scale of a typical line (capped), so it keeps its usual
+        // shape on a short, widely spaced line.
+        const { start, middle, end } = c.triplet;
+        const s = middle !== undefined ? scale : Math.min(scale, noteFontSize * 0.1);
+        const tripMidX =
+          middle !== undefined
+            ? scaledNodePositions[middle]
+            : start !== undefined
+              ? scaledNodePositions[start] + 10 * s
+              : scaledNodePositions[end!] - 10 * s;
         const nodeCenterY = -noteFontSize * 0.35;
         const triY = nodeCenterY - (c.disYMiddle ?? 9) * ptToPx;
-        const triWestX = tripMidX - 8 - 1 * scale;
-        const triEastX = tripMidX + 8 + 1 * scale;
-
-        const p0x = x1 + shiftX;
-        const dist0_pt = Math.hypot((triWestX - p0x) / scale, (triY - startY) / ptToPx);
-        const d0_pt = Math.min(20, 0.3915 * dist0_pt);
+        const triWestX = tripMidX - 8 - 1 * s;
+        const triEastX = tripMidX + 8 + 1 * s;
         const cos50 = 0.6427876;
         const sin50 = 0.7660444;
-        const tc1x = p0x + d0_pt * cos50 * scale;
-        const tc1y = startY - d0_pt * sin50 * ptToPx;
-        const tc2x = triWestX - d0_pt * scale;
-        const tc2y = triY;
 
-        elements.push(
-          `<path d="M ${p0x.toFixed(1)} ${startY.toFixed(1)} C ${tc1x.toFixed(1)} ${tc1y.toFixed(1)}, ${tc2x.toFixed(1)} ${tc2y.toFixed(1)}, ${triWestX.toFixed(1)} ${triY.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="4.5" />`
-        );
+        if (start !== undefined) {
+          const p0x = scaledNodePositions[start] + shiftX;
+          const dist0_pt = Math.hypot((triWestX - p0x) / s, (triY - startY) / ptToPx);
+          const d0_pt = Math.min(20, 0.3915 * dist0_pt);
+          const tc1x = p0x + d0_pt * cos50 * s;
+          const tc1y = startY - d0_pt * sin50 * ptToPx;
+          const tc2x = triWestX - d0_pt * s;
+          const tc2y = triY;
 
-        elements.push(
-          `<text x="${tripMidX}" y="${triY + ptToPx * 1.2}" fill="#ffffff" font-size="${Math.round(noteFontSize * 0.37)}" font-weight="bold" font-family="${SvgRenderer.MUSIC_FONT}" text-anchor="middle">3</text>`
-        );
+          elements.push(
+            `<path d="M ${p0x.toFixed(1)} ${startY.toFixed(1)} C ${tc1x.toFixed(1)} ${tc1y.toFixed(1)}, ${tc2x.toFixed(1)} ${tc2y.toFixed(1)}, ${triWestX.toFixed(1)} ${triY.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="4.5" />`
+          );
+        }
 
-        const p3x = x2 - shiftX;
-        const dist1_pt = Math.hypot((p3x - triEastX) / scale, (triY - startY) / ptToPx);
-        const d1_pt = Math.min(20, 0.3915 * dist1_pt);
-        const tc1x_r = p3x - d1_pt * cos50 * scale;
-        const tc1y_r = startY - d1_pt * sin50 * ptToPx;
-        const tc2x_r = triEastX + d1_pt * scale;
-        const tc2y_r = triY;
+        if (middle !== undefined) {
+          elements.push(
+            `<text x="${tripMidX}" y="${triY + ptToPx * 1.2}" fill="#ffffff" font-size="${Math.round(noteFontSize * 0.37)}" font-weight="bold" font-family="${SvgRenderer.MUSIC_FONT}" text-anchor="middle">3</text>`
+          );
+        }
 
-        elements.push(
-          `<path d="M ${p3x.toFixed(1)} ${startY.toFixed(1)} C ${tc1x_r.toFixed(1)} ${tc1y_r.toFixed(1)}, ${tc2x_r.toFixed(1)} ${tc2y_r.toFixed(1)}, ${triEastX.toFixed(1)} ${triY.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="4.5" />`
-        );
+        if (end !== undefined) {
+          const p3x = scaledNodePositions[end] - shiftX;
+          const dist1_pt = Math.hypot((p3x - triEastX) / s, (triY - startY) / ptToPx);
+          const d1_pt = Math.min(20, 0.3915 * dist1_pt);
+          const tc1x_r = p3x - d1_pt * cos50 * s;
+          const tc1y_r = startY - d1_pt * sin50 * ptToPx;
+          const tc2x_r = triEastX + d1_pt * s;
+          const tc2y_r = triY;
+
+          elements.push(
+            `<path d="M ${p3x.toFixed(1)} ${startY.toFixed(1)} C ${tc1x_r.toFixed(1)} ${tc1y_r.toFixed(1)}, ${tc2x_r.toFixed(1)} ${tc2y_r.toFixed(1)}, ${triEastX.toFixed(1)} ${triY.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="4.5" />`
+          );
+        }
       } else {
+        const x1 = scaledNodePositions[c.start];
+        const x2 = scaledNodePositions[c.end];
         // TikZ slur / tie cubic Bézier: bend left=45, min distance=4pt, max distance=8pt (slur) / 5pt (tie)
         const p0x = x1 + shiftX;
         const p3x = x2 - shiftX;

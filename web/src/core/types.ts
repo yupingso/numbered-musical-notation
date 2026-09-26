@@ -311,8 +311,14 @@ export interface NodeRange {
   end: number;
 }
 
-export interface TripletRange extends NodeRange {
-  middle: number;
+/**
+ * The part of a triplet on one output line. Each field is the node index of that
+ * triplet note, or undefined if a lyric line break put the note on another line.
+ */
+export interface TripletRange {
+  start?: number;
+  middle?: number;
+  end?: number;
 }
 
 export interface BarInfo {
