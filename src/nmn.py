@@ -59,8 +59,6 @@ def parse_pitch(key, s):
         acc, name, octave = None, Note.REST, 0
     elif name == 'o':
         acc, name, octave = None, Note.REST_AT_END, 0
-    elif name == 'O':
-        acc, name, octave = None, Note.REST_TO_MATCH_LYRICS, 0
     elif key == 'solfa':
         if name in '1234567':
             name = int(name)
@@ -93,10 +91,9 @@ def parse_pitch(key, s):
                 octave += 1
         name = (name - key[0]) % 7 + 1  # movable
     assert acc in [None, -1, 0, 1]
-    assert name in [1, 2, 3, 4, 5, 6, 7, Note.REST, Note.REST_AT_END,
-                    Note.REST_TO_MATCH_LYRICS]
+    assert name in [1, 2, 3, 4, 5, 6, 7, Note.REST, Note.REST_AT_END]
     assert octave in [-1, 0, 1]
-    if name in (Note.REST, Note.REST_AT_END, Note.REST_TO_MATCH_LYRICS):
+    if name in (Note.REST, Note.REST_AT_END):
         assert acc is None
         assert octave == 0
     return acc, name, octave
@@ -387,11 +384,7 @@ class Song:
                             raise ValueError('#notes > {} words'
                                              .format(num_words))
                         lyrics = all_lyrics[lyrics_idx]
-                        if note.is_rest:
-                            if lyrics != 'O':
-                                raise ValueError(
-                                    f'note O cannot match lyrics "{lyrics}"')
-                        elif lyrics != '~':
+                        if lyrics != '~':
                             node.text = lyrics
                         lyrics_idx += 1
                         section_added, line_added = False, False

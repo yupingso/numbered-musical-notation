@@ -15,7 +15,6 @@ class Note:
 
     REST = 0
     REST_AT_END = -1
-    REST_TO_MATCH_LYRICS = -2
 
     possible_ends = {}
 
@@ -31,8 +30,6 @@ class Note:
                 line
                 -1 (REST_AT_END) for a rest, which may be placed at the end of
                 a line
-                -2 (REST_TO_MATCH_LYRICS) for a rest, which will be matched to
-                lyrics
             octave (int)
             duration (Fraction)
             dashes (int): Number of dashes
@@ -69,7 +66,7 @@ class Note:
 
     @property
     def has_lyrics(self):
-        return self._name > 0 or self._name == self.REST_TO_MATCH_LYRICS
+        return self._name > 0
 
     @property
     def is_first_in_tie(self):
@@ -235,8 +232,6 @@ class Note:
                     subnote.tie[1] = True
             else:
                 subnote.tie[0] = True
-                if note._name == Note.REST_TO_MATCH_LYRICS:
-                    subnote._name = Note.REST
             subnotes.append(subnote)
             debug_log.append('   > {}'.format(subnote))
             beat = end_beat

@@ -179,9 +179,6 @@ export function splitNote(time: ParsedTime, startBeat: Fraction, note: Note): No
       }
     } else {
       subnote.tie[0] = true;
-      if (note._name === Note.REST_TO_MATCH_LYRICS) {
-        subnote._name = Note.REST;
-      }
     }
     subnotes.push(subnote);
     beat = endBeat;

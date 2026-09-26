@@ -96,7 +96,7 @@ export interface PitchValue {
   accidental: Accidental | null;
   name: number;
   octave: number;
-  restType?: '0' | 'o' | 'O';
+  restType?: '0' | 'o';
   isRest: boolean;
 }
 
@@ -135,7 +135,6 @@ export interface MelodicUnit {
 export class Note {
   static readonly REST = 0;
   static readonly REST_AT_END = -1;
-  static readonly REST_TO_MATCH_LYRICS = -2;
 
   acc: Accidental | null;
   _name: number; // 0-7, or negative for special rest types
@@ -182,7 +181,7 @@ export class Note {
   }
 
   get hasLyrics(): boolean {
-    return this._name > 0 || this._name === Note.REST_TO_MATCH_LYRICS;
+    return this._name > 0;
   }
 
   get isFirstInTie(): boolean {
@@ -204,7 +203,6 @@ export class Note {
   toPitchString(): string {
     if (this.isRest) {
       if (this._name === Note.REST_AT_END) return 'o';
-      if (this._name === Note.REST_TO_MATCH_LYRICS) return 'O';
       return '0';
     }
     let p = '';

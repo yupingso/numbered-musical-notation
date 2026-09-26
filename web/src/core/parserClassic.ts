@@ -201,8 +201,6 @@ export function parsePitch(
     return [null, Note.REST, 0];
   } else if (nameStr === 'o') {
     return [null, Note.REST_AT_END, 0];
-  } else if (nameStr === 'O') {
-    return [null, Note.REST_TO_MATCH_LYRICS, 0];
   }
 
   let name = 0;
@@ -691,8 +689,6 @@ export class ClassicSongParser {
               restType:
                 note._name === Note.REST_AT_END
                   ? 'o'
-                  : note._name === Note.REST_TO_MATCH_LYRICS
-                  ? 'O'
                   : note.isRest
                   ? '0'
                   : undefined,
@@ -708,11 +704,7 @@ export class ClassicSongParser {
             if (lyricsIdx < numWords) {
               const lyricChar = allLyrics[lyricsIdx];
               const lyricSpan = allLyricSpans[lyricsIdx];
-              if (note.isRest) {
-                if (lyricChar !== 'O') {
-                  this.errors.push(`Note O cannot match lyrics "${lyricChar}"`);
-                }
-              } else if (lyricChar === '~') {
+              if (lyricChar === '~') {
                 newUnit.slurFromPrev = true;
                 if (currentUnit) currentUnit.slurToNext = true;
                 if (lyricSpan) {
