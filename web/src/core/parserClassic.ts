@@ -987,7 +987,9 @@ export class ClassicSongParser {
     line.underlinesList = underlinesList;
     line.triplets = [...tripletRanges.values()];
     for (const range of line.triplets) {
-      if (range.start === undefined || range.end === undefined) {
+      // A triplet split by a lyric line break starts on exactly one line. Report it
+      // there only, not again on each later line that holds the rest of it.
+      if (range.start !== undefined && range.end === undefined) {
         this.diagnostics.report(DiagnosticCode.TripletSplitByLine);
       }
     }
