@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "copy-fonts": "node -e 'const fs=require(\"fs\"); const p=\"public/fonts\"; const src=\"../latex/fonts/kaiu.ttf\"; if(fs.existsSync(src)){fs.mkdirSync(p,{recursive:true}); fs.copyFileSync(src, p+\"/kaiu.ttf\");}'",
+    "predev": "npm run copy-fonts",
     "dev": "vite",
-    "prebuild": "node -e 'const fs=require(\"fs\"); const p=\"public/fonts\"; const src=\"../latex/fonts/kaiu.ttf\"; if(fs.existsSync(src)){fs.mkdirSync(p,{recursive:true}); fs.copyFileSync(src, p+\"/kaiu.ttf\");}'",
+    "prebuild": "npm run copy-fonts",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",

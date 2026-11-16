@@ -83,7 +83,7 @@ export class SvgRenderer {
 
   // Font families
   static readonly MUSIC_FONT = "'Times New Roman', 'Liberation Serif', serif";
-  static readonly LYRIC_FONT = "'DFKai-SB', 'BiauKai', '標楷體', 'TW-Kai', 'STKaiti', 'KaiTi', serif";
+  static readonly LYRIC_FONT = "'DFKai-SB', 'BiauKai', '標楷體', 'TW-Kai', serif";
 
   private calcCurveDistances(curves: CurveLayout[], nodes: NodeElement[]): void {
     // Check triplet intersections (matching Python _calc_distance)
@@ -491,7 +491,7 @@ export class SvgRenderer {
     const line2Y = SvgRenderer.LINE2_Y;
 
     return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+<svg xmlns="http://www.w3.org/2000/svg" lang="zh-TW" xml:lang="zh-TW" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
   <!-- Solid black background for church projection -->
   <rect width="${W}" height="${H}" fill="#000000" />
 
@@ -548,7 +548,7 @@ export class SvgRenderer {
       .join('\n  ');
 
     return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+<svg xmlns="http://www.w3.org/2000/svg" lang="zh-TW" xml:lang="zh-TW" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
   <rect width="${W}" height="${H}" fill="#000000" />
   <!-- Album Name (54pt -> 76px, bold 標楷體) -->
   <text x="137" y="178" fill="#ffff00" font-family="${SvgRenderer.LYRIC_FONT}" font-size="76" font-weight="bold">${escapeXml(album)}</text>

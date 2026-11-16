@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: 'DFKai-SB';
-  src: local('DFKai-SB'), local('BiauKai'), local('標楷體'), local('TW-Kai'), local('STKaiti'), local('KaiTi'), url('/fonts/kaiu.ttf') format('truetype');
+  src: local('DFKai-SB'), local('BiauKai'), local('標楷體'), local('TW-Kai'), url('/fonts/kaiu.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
