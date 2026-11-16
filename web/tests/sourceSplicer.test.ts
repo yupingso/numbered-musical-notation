@@ -717,6 +717,90 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
     expect((reSuoNode.value as Note).name).toBe(5);
   });
 
+  it('preserves intra-bar tied notes via SourceSpan in spliceMelodyPitch and rebarMelodyWithDurationEdit', async () => {
+    const { spliceMelodyPitch, rebarMelodyWithDurationEdit, decomposeNoteAcrossBars } =
+      await import('../src/core/sourceSplicer');
+
+    const melody = `<key> C\n<time> 4/4\n3_2_3_1=1=~1_6.`;
+    const lyrics = `<tag> 主歌\n甲乙丙丁戊~`;
+    const ast = parseClassicSong(melody, lyrics);
+    expect(ast.errors).toBeUndefined();
+
+    // Node for '戊' is the leading segment of 1=~1_; next node is continuation segment 1_
+    const wuNodeIdx = ast.sections[0].lines[0].nodes.findIndex((n) => n.text === '戊');
+    const wuNode = ast.sections[0].lines[0].nodes[wuNodeIdx];
+    const contNode = ast.sections[0].lines[0].nodes[wuNodeIdx + 1];
+
+    expect(spliceMelodyPitch(melody, wuNode.melodySpan!, "1'")).toBe(
+      `<key> C\n<time> 4/4\n3_2_3_1=1'=~1'_6.`
+    );
+    expect(spliceMelodyPitch(melody, contNode.melodySpan!, "1'")).toBe(
+      `<key> C\n<time> 4/4\n3_2_3_1=1'=~1'_6.`
+    );
+    expect(rebarMelodyWithDurationEdit(melody, wuNode.melodySpan!, 0.75, "1'")).toBe(
+      `<key> C\n<time> 4/4\n3_2_3_1=1'=~1'_6.`
+    );
+    expect(rebarMelodyWithDurationEdit(melody, contNode.melodySpan!, 0.75, "1'")).toBe(
+      `<key> C\n<time> 4/4\n3_2_3_1=1'=~1'_6.`
+    );
+
+    // Rest decomposition across barlines never emits '~' ties
+    const restDecomp = decomposeNoteAcrossBars('0', 2.5, 2.0, {
+      upper: 4,
+      lower: 4,
+      hyphen: 32,
+    });
+    expect(restDecomp.bars).toEqual([['0 -'], ['0_']]);
+
+    // Courtesy-natural ties (1~%1) are recognized as one 2-beat unit in rebarMelodyWithDurationEdit
+    const natMelody = `<key> C\n<time> 4/4\n| 1~%1 3 4 |`;
+    const natAst = parseClassicSong(natMelody, `<tag> 主歌\n一二三`);
+    const natSpan = natAst.sections[0].lines[0].nodes[0].melodySpan!;
+    expect(rebarMelodyWithDurationEdit(natMelody, natSpan, 2.0, '2')).toBe(
+      `<key> C\n<time> 4/4\n| 2~2 3 4 |`
+    );
+    expect(rebarMelodyWithDurationEdit(natMelody, natSpan, 1.0, '2')).toContain('2 3 4');
+    expect(rebarMelodyWithDurationEdit(natMelody, natSpan, 1.0, '2')).not.toContain('%1');
+
+    // rebarMelodyWithDurationEdit preserves outer leading tie on bracket neighbor (including right after '|')
+    const bracketRebar = `<key> C\n<time> 4/4\n| 1 2 5_ 3_ | ~[31]=~1_ 2_ 3 - |`;
+    const bracketRebarAst = parseClassicSong(bracketRebar, `<tag> 主歌\n一二三四五六七`);
+    expect(bracketRebarAst.errors).toBeUndefined();
+    const innerSpan = bracketRebarAst.sections[0].lines[0].units[4].segments[0].pitchSpan!;
+    const rebarredBracket = rebarMelodyWithDurationEdit(bracketRebar, innerSpan, 1.25);
+    expect(rebarredBracket).toBe(
+      `<key> C\n<time> 4/4\n| 1 2 5_ 3_ | ~3= 1_. ~ 1_ 2_ 3 - |\n`
+    );
+    expect(
+      parseClassicSong(rebarredBracket, `<tag> 主歌\n一二三四五六七`).errors
+    ).toBeUndefined();
+
+    // spliceMelodyNoteDuration regex fallback preserves beforeNotes/afterNotes and outer ties on multi-segment bracket+tie
+    const { spliceMelodyNoteDuration } = await import('../src/core/sourceSplicer');
+    const fallbackMelody = `<key> C\n<time> 4/4\n| 1 2 3 4 |\nbreak\n| 3_ ~[31]=~[16]= 2 3 - |`;
+    const innerIdx = fallbackMelody.indexOf('[31]=') + 2; // '1' inside ~[31]=
+    const fallbackSpan = { start: innerIdx, end: innerIdx + 1 };
+    expect(spliceMelodyNoteDuration(fallbackMelody, fallbackSpan, 0.75, '5')).toBe(
+      `<key> C\n<time> 4/4\n| 1 2 3 4 |\nbreak\n| 3_ ~3= 5_. 6= 2 3 - |`
+    );
+    expect(spliceMelodyNoteDuration(fallbackMelody, fallbackSpan, 0.75, '0')).toBe(
+      `<key> C\n<time> 4/4\n| 1 2 3 4 |\nbreak\n| 3_ ~3= 0_. 6= 2 3 - |`
+    );
+
+    // Tie removal before newline does not inject trailing space, and hyphen=16 pitch edit stays in-place
+    const nlTieMelody = `<key> C\n<time> 4/4\n1~\n1 2 3`;
+    const nlIdx = nlTieMelody.indexOf('1~');
+    expect(spliceMelodyPitch(nlTieMelody, { start: nlIdx, end: nlIdx + 1 }, '0')).toBe(
+      `<key> C\n<time> 4/4\n0\n0 2 3`
+    );
+
+    const hyphenRebar = `<key> C\n<time> 4/4 hyphen=16\n| 3--- 1----- 2--- 5----- |`;
+    const hIdx = hyphenRebar.indexOf('1-----');
+    expect(rebarMelodyWithDurationEdit(hyphenRebar, { start: hIdx, end: hIdx + 1 }, 1.5, "1'")).toBe(
+      `<key> C\n<time> 4/4 hyphen=16\n| 3--- 1'----- 2--- 5----- |`
+    );
+  });
+
   it('correctly handles Unicode surrogate pairs (e.g. CJK Ext-B or emoji) as single syllables', () => {
     const melody = `<time> 4/4\n| 1 2 3 4 |`;
     const lyrics = `<tag> 主歌\n𠮷野家好`;

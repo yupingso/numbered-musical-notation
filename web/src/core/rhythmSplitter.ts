@@ -225,9 +225,10 @@ export function formatSingleNoteToken(pitch: string, dur: number): string {
     if (fracPart === 0) {
       return pitch + ' ' + Array(intPart - 1).fill('-').join(' ');
     }
+    const isRestPitch = pitch === '0' || pitch === 'o';
     return (
       formatSingleNoteToken(pitch, intPart) +
-      ' ~ ' +
+      (isRestPitch ? ' ' : ' ~ ') +
       formatSingleNoteToken(pitch, fracPart)
     );
   }
@@ -253,6 +254,12 @@ export function decomposeNoteAcrossBars(
     ...time,
     hyphen: time.hyphen || 32,
   };
+  const isRestPitch = pitch === '0' || pitch === 'o';
+  const dummyPitchName = isRestPitch
+    ? pitch === 'o'
+      ? Note.REST_AT_END
+      : Note.REST
+    : 1;
 
   let currentBeat = startBeatInBar;
   let remainingDur = totalDuration;
@@ -264,7 +271,12 @@ export function decomposeNoteAcrossBars(
     const isCrossingBarline = remainingDur > spaceLeft + 1e-6;
 
     // Use splitNote to partition chunkDur within current bar
-    const dummyNote = new Note(null, 1, 0, new Fraction(Math.round(chunkDur * 32), 32));
+    const dummyNote = new Note(
+      null,
+      dummyPitchName,
+      0,
+      new Fraction(Math.round(chunkDur * 32), 32)
+    );
     const startFrac = new Fraction(Math.round(currentBeat * 32), 32);
     const subnotes = splitNote(timeWithHyphen, startFrac, dummyNote);
 
@@ -272,9 +284,10 @@ export function decomposeNoteAcrossBars(
       const sn = subnotes[i];
       const snDur = sn.duration.toNumber();
       let token = formatSingleNoteToken(pitch, snDur);
-      // Tie if splitNote ties internally or if this subnote crosses the barline
+      // Tie if splitNote ties internally or if this subnote crosses the barline (never on rests)
       const needsTie =
-        sn.tie[1] || (i === subnotes.length - 1 && isCrossingBarline);
+        !isRestPitch &&
+        (sn.tie[1] || (i === subnotes.length - 1 && isCrossingBarline));
       if (needsTie) {
         token += ' ~';
       }
