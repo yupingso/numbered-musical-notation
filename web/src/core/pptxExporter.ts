@@ -5,6 +5,8 @@ import {
   splitTitleLines,
   calculateSubtitleLayout,
   splitSubtitleLines,
+  calculateCreditsLayout,
+  splitCreditsLines,
 } from './svgRenderer';
 
 export interface PptxExportOptions {
@@ -88,12 +90,33 @@ export function updateSlide1Xml(slide1Xml: string, metadata?: SongMetadata): str
     );
   }
 
-  // 4. Update Credits in P4
+  // 4. Update Credits in Shape 45
   if (metadata.credits) {
+    const credLines = splitCreditsLines(metadata.credits);
+    const credLayout = calculateCreditsLayout(metadata.credits);
+    const sz = Math.round((credLayout.fontSize * 4000) / 56);
+    const spcPts = credLines.length > 1 ? 6 : 11;
+
+    const paragraphsXml = credLines
+      .map(
+        (line) =>
+          `<a:p><a:pPr algn="ctr"><a:lnSpc><a:spcPct val="100000"/></a:lnSpc><a:spcBef><a:spcPts val="${spcPts}"/></a:spcBef><a:spcAft><a:spcPts val="${spcPts}"/></a:spcAft></a:pPr><a:r><a:rPr b="0" lang="zh-TW" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Times New Roman"/><a:ea typeface="標楷體"/></a:rPr><a:t>${escapeXml(
+            line
+          )}</a:t></a:r><a:endParaRPr b="0" lang="en-US" sz="${sz}" spc="-1" strike="noStrike"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill><a:latin typeface="Arial"/></a:endParaRPr></a:p>`
+      )
+      .join('');
+
     result = result.replace(
-      /(<a:p>.*?algn="ctr".*?sz="4000".*?<a:t>)(?:[^<]*)(<\/a:t><\/a:r>)(?:<a:r>.*?<\/a:r>)*(.*?<\/a:p>)/s,
-      `$1${escapeXml(metadata.credits)}$2$3`
+      /(<p:cNvPr id="45"[^>]*>.*?<p:txBody>.*?<a:bodyPr[^>]*>.*?<\/a:bodyPr>)(?:.*?)(<\/p:txBody>)/s,
+      `$1${paragraphsXml}$2`
     );
+
+    if (credLines.length > 1) {
+      result = result.replace(
+        /(<p:cNvPr id="45"[^>]*>.*?<a:xfrm>\s*<a:off x="0" y=")5589720("\/>\s*<a:ext cx="9143640" cy=")699120("\/>)/s,
+        '$15320000$21150000$3'
+      );
+    }
   }
 
   return result;

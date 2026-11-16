@@ -520,11 +520,11 @@ export class SvgRenderer {
     const W = SvgRenderer.SLIDE_WIDTH;
     const H = SvgRenderer.SLIDE_HEIGHT;
     const album = options?.album ? options.album : '專輯';
-    const credits = options?.credits ? options.credits : '詞： / 曲：';
 
     const titleLayout = calculateTitleLayout(options?.title);
     const isTitleMultiLine = titleLayout.lines.length > 1;
     const subtitleLayout = calculateSubtitleLayout(options?.subtitle, isTitleMultiLine);
+    const creditsLayout = calculateCreditsLayout(options?.credits);
 
     const titleElements = titleLayout.lines
       .map(
@@ -540,6 +540,13 @@ export class SvgRenderer {
       )
       .join('\n  ');
 
+    const creditsElements = creditsLayout.lines
+      .map(
+        (line, idx) =>
+          `<text x="512" y="${creditsLayout.lineYCoords[idx]}" fill="#ffffff" font-family="${SvgRenderer.LYRIC_FONT}" font-size="${creditsLayout.fontSize}" font-weight="normal" text-anchor="middle">${escapeXml(line)}</text>`
+      )
+      .join('\n  ');
+
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
   <rect width="${W}" height="${H}" fill="#000000" />
@@ -549,8 +556,8 @@ export class SvgRenderer {
   ${titleElements}
   <!-- English/Secondary Subtitle (${subtitleLayout.lines.length} lines, font-size: ${subtitleLayout.fontSize}px, bold Times New Roman, centered) -->
   ${subtitleElements}
-  <!-- Credits (40pt -> 56px, regular 標楷體, centered) -->
-  <text x="512" y="682" fill="#ffffff" font-family="${SvgRenderer.LYRIC_FONT}" font-size="56" font-weight="normal" text-anchor="middle">${escapeXml(credits)}</text>
+  <!-- Credits (${creditsLayout.lines.length} lines, font-size: ${creditsLayout.fontSize}px, regular 標楷體, centered) -->
+  ${creditsElements}
 </svg>`;
   }
 }
@@ -709,6 +716,77 @@ export function calculateSubtitleLayout(
 
   const startY = isTitleMultiLine ? 525 : 500;
   const lineSpacing = Math.round(fontSize * 1.18);
+  const lineYCoords = lines.map((_, i) => startY + i * lineSpacing);
+
+  return {
+    lines,
+    fontSize,
+    lineYCoords,
+  };
+}
+
+export interface CreditsLayout {
+  lines: string[];
+  fontSize: number;
+  lineYCoords: number[];
+}
+
+export function splitCreditsLines(
+  credits?: string,
+  preserveEmpty: boolean = false
+): string[] {
+  if (!credits) return ['詞： / 曲：'];
+  const rawLines = credits.split(/\r?\n|\\n/);
+  if (preserveEmpty) {
+    return rawLines.map((l) => l.trim());
+  }
+  const trimmed = rawLines.map((l) => l.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : ['詞： / 曲：'];
+}
+
+export function calculateCreditsLayout(
+  credits?: string,
+  preserveEmpty: boolean = false
+): CreditsLayout {
+  const lines = splitCreditsLines(credits, preserveEmpty);
+  const availableWidth = 880;
+
+  if (lines.length <= 1) {
+    const single = lines[0] || '詞： / 曲：';
+    const units = measureTitleUnits(single);
+    let fontSize = 56;
+    if (units * 56 > availableWidth) {
+      fontSize = Math.max(32, Math.min(56, Math.floor(availableWidth / units)));
+    }
+    return {
+      lines: [single],
+      fontSize,
+      lineYCoords: [682],
+    };
+  }
+
+  // 2 or more lines
+  const maxUnits = Math.max(...lines.map(measureTitleUnits));
+  let baseSize = 48;
+  if (lines.length > 2) {
+    baseSize = Math.max(30, Math.floor(96 / lines.length));
+  }
+
+  let fontSize = baseSize;
+  if (maxUnits * baseSize > availableWidth) {
+    fontSize = Math.max(28, Math.min(baseSize, Math.floor(availableWidth / maxUnits)));
+  }
+
+  const lineSpacing = Math.round(fontSize * 1.21);
+  if (lines.length === 2) {
+    return {
+      lines,
+      fontSize,
+      lineYCoords: [648, 648 + lineSpacing],
+    };
+  }
+
+  const startY = Math.round(677 - ((lines.length - 1) * lineSpacing) / 2);
   const lineYCoords = lines.map((_, i) => startY + i * lineSpacing);
 
   return {

@@ -432,6 +432,52 @@ describe('SvgRenderer', () => {
     const subLayout = calculateSubtitleLayout('All the Days of My Life\n', false, true);
     expect(subLayout.lines).toHaveLength(2);
     expect(subLayout.fontSize).toBe(48);
+
+    // Credits: trailing newline after Shift+Enter
+    const { calculateCreditsLayout, splitCreditsLines } = await import('../src/core/svgRenderer');
+    expect(splitCreditsLines('詞：王小明、陳大華\n', true)).toEqual([
+      '詞：王小明、陳大華',
+      '',
+    ]);
+    const credLayout = calculateCreditsLayout('詞：王小明、陳大華\n', true);
+    expect(credLayout.lines).toHaveLength(2);
+    expect(credLayout.fontSize).toBe(48);
+  });
+
+  it('supports explicit 2-line credits and auto-shrinks long single-line credits without splitting on slash', async () => {
+    const { calculateCreditsLayout, splitCreditsLines } = await import('../src/core/svgRenderer');
+
+    // Long single-line credits with ／ stays on 1 line and shrinks font to fit 880px
+    const singleLong = '詞：王小明、陳大華 ／ 曲：王小明、林志明';
+    expect(splitCreditsLines(singleLong)).toEqual([singleLong]);
+    const singleLayout = calculateCreditsLayout(singleLong);
+    expect(singleLayout.lines).toHaveLength(1);
+    expect(singleLayout.fontSize).toBe(44);
+    expect(singleLayout.lineYCoords).toEqual([682]);
+
+    // Explicit 2-line credits via \n or \\n
+    expect(splitCreditsLines('詞：王小明、陳大華\\n曲：王小明、林志明')).toEqual([
+      '詞：王小明、陳大華',
+      '曲：王小明、林志明',
+    ]);
+    expect(splitCreditsLines('詞：王小明、陳大華\n曲：王小明、林志明')).toEqual([
+      '詞：王小明、陳大華',
+      '曲：王小明、林志明',
+    ]);
+
+    const twoLineLayout = calculateCreditsLayout('詞：王小明、陳大華\\n曲：王小明、林志明');
+    expect(twoLineLayout.lines).toHaveLength(2);
+    expect(twoLineLayout.fontSize).toBe(48);
+    expect(twoLineLayout.lineYCoords).toEqual([648, 706]);
+
+    const titleSvg = SvgRenderer.renderTitleSlideSvg({
+      title: '範例標題',
+      credits: '詞：王小明、陳大華\\n曲：王小明、林志明',
+    });
+    expect(titleSvg).toContain('y="648"');
+    expect(titleSvg).toContain('>詞：王小明、陳大華<');
+    expect(titleSvg).toContain('y="706"');
+    expect(titleSvg).toContain('>曲：王小明、林志明<');
   });
 
   it('centers notation lines horizontally with balanced margins and vertical separation', () => {

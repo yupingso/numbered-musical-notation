@@ -127,4 +127,37 @@ describe('pptxExporter with template.pptx', () => {
     expect(slide1Xml).toContain('In the House of the Lord');
     expect(slide1Xml).toContain('sz="3388"');
   });
+
+  it('updates Slide 1 with 2-line credits and auto-shrunk 1-line credits in exported PPTX', async () => {
+    const templateData = fs.readFileSync(templatePath);
+    const outTwoLine = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '範例標題',
+        credits: '詞：王小明、陳大華\n曲：王小明、林志明',
+      },
+    });
+
+    const zip2 = await JSZip.loadAsync(outTwoLine);
+    const slide1TwoLine = await zip2.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1TwoLine).toContain('詞：王小明、陳大華');
+    expect(slide1TwoLine).toContain('曲：王小明、林志明');
+    expect(slide1TwoLine).toContain('sz="3429"');
+    expect(slide1TwoLine).toContain('y="5320000"');
+    expect(slide1TwoLine).toContain('cy="1150000"');
+
+    const outLongSingle = await appendSlidesToPptx({
+      templateData,
+      slidePngImages: [],
+      metadata: {
+        title: '範例標題',
+        credits: '詞：王小明、陳大華 ／ 曲：王小明、林志明',
+      },
+    });
+    const zip1 = await JSZip.loadAsync(outLongSingle);
+    const slide1Single = await zip1.file('ppt/slides/slide1.xml')!.async('text');
+    expect(slide1Single).toContain('詞：王小明、陳大華 ／ 曲：王小明、林志明');
+    expect(slide1Single).toContain('sz="3143"');
+  });
 });

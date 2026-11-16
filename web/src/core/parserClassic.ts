@@ -1019,6 +1019,7 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
   // Parse melody
   let melodyOffset = 0;
+  let hasMelodyCredits = false;
   const melodyLines = melodyText.split(/\r?\n/);
   for (const rawLine of melodyLines) {
     const trimmed = rawLine.trim();
@@ -1074,7 +1075,14 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
         if (field === 'title') metadata.title = val;
         else if (field === 'subtitle') metadata.subtitle = val;
         else if (field === 'album') metadata.album = val;
-        else if (field === 'credits') metadata.credits = val;
+        else if (field === 'credits') {
+          if (!hasMelodyCredits) {
+            metadata.credits = val;
+            hasMelodyCredits = true;
+          } else if (val) {
+            metadata.credits = metadata.credits ? `${metadata.credits}\n${val}` : val;
+          }
+        }
       }
     } else {
       for (let c = 0; c < line.length; c++) {
@@ -1098,6 +1106,7 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
 
   // Parse lyrics
   let lyricOffset = 0;
+  let hasLyricsCredits = false;
   const lyricsLines = lyricsText.split(/\r?\n/);
   for (const rawLine of lyricsLines) {
     const trimmed = rawLine.trim();
@@ -1117,7 +1126,14 @@ export function parseClassicSong(melodyText: string, lyricsText: string): SongAS
         if (field === 'title') metadata.title = val;
         else if (field === 'subtitle') metadata.subtitle = val;
         else if (field === 'album') metadata.album = val;
-        else if (field === 'credits') metadata.credits = val;
+        else if (field === 'credits') {
+          if (!hasLyricsCredits) {
+            metadata.credits = val;
+            hasLyricsCredits = true;
+          } else if (val) {
+            metadata.credits = metadata.credits ? `${metadata.credits}\n${val}` : val;
+          }
+        }
       }
       continue;
     }
@@ -1176,6 +1192,7 @@ export function parseSongMetadata(lyricsText: string, melodyText: string = ''): 
   const metadata: SongMetadata = {};
 
   // Check melody text first as fallback
+  let hasMelodyCredits = false;
   const mLines = melodyText.split(/\r?\n/);
   for (const raw of mLines) {
     const line = raw.trim();
@@ -1187,12 +1204,20 @@ export function parseSongMetadata(lyricsText: string, melodyText: string = ''): 
         if (field === 'title') metadata.title = val;
         else if (field === 'subtitle') metadata.subtitle = val;
         else if (field === 'album') metadata.album = val;
-        else if (field === 'credits') metadata.credits = val;
+        else if (field === 'credits') {
+          if (!hasMelodyCredits) {
+            metadata.credits = val;
+            hasMelodyCredits = true;
+          } else if (val) {
+            metadata.credits = metadata.credits ? `${metadata.credits}\n${val}` : val;
+          }
+        }
       }
     }
   }
 
   // Lyrics text takes precedence
+  let hasLyricsCredits = false;
   const lLines = lyricsText.split(/\r?\n/);
   for (const raw of lLines) {
     const line = raw.trim();
@@ -1204,7 +1229,14 @@ export function parseSongMetadata(lyricsText: string, melodyText: string = ''): 
         if (field === 'title') metadata.title = val;
         else if (field === 'subtitle') metadata.subtitle = val;
         else if (field === 'album') metadata.album = val;
-        else if (field === 'credits') metadata.credits = val;
+        else if (field === 'credits') {
+          if (!hasLyricsCredits) {
+            metadata.credits = val;
+            hasLyricsCredits = true;
+          } else if (val) {
+            metadata.credits = metadata.credits ? `${metadata.credits}\n${val}` : val;
+          }
+        }
       }
     }
   }

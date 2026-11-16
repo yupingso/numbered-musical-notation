@@ -832,6 +832,38 @@ describe('Strategy A: Minimal In-Place Duration Edit (spliceMelodyNoteDuration)'
         `<title> 一生一世\\n在主的殿中\n<subtitle> All the Days of My Life\\nIn the House of the Lord\n<tag> 主歌\n主 賜 給 我`
       );
     });
+
+    it('parses repeated <credits> lines into 2-line credits and deduplicates on updateLyricsMetadata', async () => {
+      const { parseSongMetadata } = await import('../src/core/parserClassic');
+      const { updateLyricsMetadata } = await import('../src/core/sourceSplicer');
+
+      const melody = `<credits> 備用詞曲\n<credits>\n<time> 4/4\n| 1 2 3 4 |`;
+      const lyricsOnlyTag = `<tag> 主歌\n一 二 三 四`;
+      expect(parseClassicSong(melody, lyricsOnlyTag).metadata?.credits).toBe('備用詞曲');
+      expect(parseSongMetadata(lyricsOnlyTag, melody).credits).toBe('備用詞曲');
+
+      const lyrics = `<title> 範例標題\n<credits> 詞：王小明、陳大華\n<credits> 曲：王小明、林志明\n<tag> 主歌\n一 二 三 四`;
+
+      const ast = parseClassicSong(melody, lyrics);
+      expect(ast.metadata?.credits).toBe('詞：王小明、陳大華\n曲：王小明、林志明');
+      expect(parseSongMetadata(lyrics, melody).credits).toBe(
+        '詞：王小明、陳大華\n曲：王小明、林志明'
+      );
+
+      // Updating credits collapses duplicate <credits> lines into a single \n-escaped directive
+      const updated = updateLyricsMetadata(lyrics, {
+        credits: '詞：王小明\n曲：林志明',
+      });
+      expect(updated).toBe(
+        `<title> 範例標題\n<credits> 詞：王小明\\n曲：林志明\n<tag> 主歌\n一 二 三 四`
+      );
+
+      // Clearing credits removes all <credits> lines
+      const cleared = updateLyricsMetadata(lyrics, {
+        credits: '',
+      });
+      expect(cleared).toBe(`<title> 範例標題\n<tag> 主歌\n一 二 三 四`);
+    });
   });
 
   describe('Lyric Slur Group Splicing & Context (Item 3)', () => {

@@ -1491,10 +1491,11 @@ export function updateLyricsMetadata(
     if (newMetadata[key] === undefined) continue;
 
     let val = newMetadata[key]?.trim() ?? '';
-    if (key === 'title' || key === 'subtitle') {
+    if (key === 'title' || key === 'subtitle' || key === 'credits') {
       val = val.replace(/\r?\n/g, '\\n');
     }
     const existingIdx = directiveIndices.get(key);
+    const tagRe = new RegExp(`^<${tag}>`, 'i');
 
     if (existingIdx !== undefined) {
       if (val) {
@@ -1505,6 +1506,16 @@ export function updateLyricsMetadata(
           if (idx > existingIdx) directiveIndices.set(k, idx - 1);
         }
         directiveIndices.delete(key);
+      }
+      // Remove any extra repeated lines for the same directive (e.g. duplicate <credits>)
+      const startScan = val ? existingIdx + 1 : existingIdx;
+      for (let r = resultLines.length - 1; r >= startScan; r--) {
+        if (tagRe.test(resultLines[r].trim())) {
+          resultLines.splice(r, 1);
+          for (const [k, idx] of directiveIndices.entries()) {
+            if (idx > r) directiveIndices.set(k, idx - 1);
+          }
+        }
       }
     } else if (val) {
       let highestExisting = -1;

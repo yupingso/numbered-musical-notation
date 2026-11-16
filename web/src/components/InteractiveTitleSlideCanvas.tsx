@@ -4,6 +4,7 @@ import {
   SvgRenderer,
   calculateTitleLayout,
   calculateSubtitleLayout,
+  calculateCreditsLayout,
 } from '../core/svgRenderer';
 
 export interface InteractiveTitleSlideCanvasProps {
@@ -58,16 +59,17 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
       : (metadata?.credits ?? '');
 
   const displayAlbum = rawAlbum || '專輯';
-  const displayCredits = rawCredits || '詞： / 曲：';
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const subtitleTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const creditsTextareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Compute base layouts matching SvgRenderer
   const titleLayout = calculateTitleLayout(rawTitle || '標題');
   const isTitleMultiLine = titleLayout.lines.length > 1;
   const subtitleLayout = calculateSubtitleLayout(rawSubtitle || 'Title', isTitleMultiLine);
+  const creditsLayout = calculateCreditsLayout(rawCredits || '詞： / 曲：');
 
   // Start editing a specific field: populate with display/placeholder so select() highlights it
   const startEditing = (field: EditableField) => {
@@ -79,7 +81,7 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
     } else if (field === 'album') {
       setEditText(rawAlbum || '專輯');
     } else if (field === 'credits') {
-      setEditText(rawCredits || '詞： / 曲：');
+      setEditText(rawCredits ? rawCredits.replace(/\\n/g, '\n') : '詞： / 曲：');
     }
   };
 
@@ -137,6 +139,9 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
       } else if (activeField === 'subtitle' && subtitleTextareaRef.current) {
         subtitleTextareaRef.current.focus();
         subtitleTextareaRef.current.select();
+      } else if (activeField === 'credits' && creditsTextareaRef.current) {
+        creditsTextareaRef.current.focus();
+        creditsTextareaRef.current.select();
       } else if (inputRef.current) {
         inputRef.current.focus();
         inputRef.current.select();
@@ -152,6 +157,9 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
     }
     if (subtitleTextareaRef.current) {
       subtitleTextareaRef.current.scrollTop = 0;
+    }
+    if (creditsTextareaRef.current) {
+      creditsTextareaRef.current.scrollTop = 0;
     }
   }, [editText, activeField]);
 
@@ -197,9 +205,24 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
   const albumBoxY = 114;
   const albumBoxH = 82;
 
-  // 4. Credits geometry: baseline 682, font size 56px
-  const creditsBoxY = 635;
-  const creditsBoxH = 62;
+  // 4. Dynamic Credits geometry: supports 1 or 2 lines (reactive to Shift+Enter)
+  const activeCreditsLayout = calculateCreditsLayout(
+    activeField === 'credits' ? editText : rawCredits || '詞： / 曲：',
+    activeField === 'credits'
+  );
+  const isEditingCreditsMultiLine = activeCreditsLayout.lines.length > 1;
+  const creditsBoxW = 880;
+  const creditsBoxX = (W - creditsBoxW) / 2;
+  const creditsFontSize = activeCreditsLayout.fontSize;
+  const creditsBoxY = isEditingCreditsMultiLine
+    ? 604
+    : Math.round(682 - creditsFontSize * 0.82 - (creditsFontSize * 0.15) / 2);
+  const creditsLineHeight = isEditingCreditsMultiLine
+    ? `${Math.round(creditsFontSize * 1.21)}px`
+    : `${Math.round(creditsFontSize * 1.15)}px`;
+  const creditsBoxH = isEditingCreditsMultiLine
+    ? 126
+    : Math.round(creditsFontSize * 1.18);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center select-none">
@@ -500,33 +523,56 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
           </g>
         )}
 
-        {/* 4. Credits (bottom centered, exact font 56px regular) */}
+        {/* 4. Credits (bottom centered, supports 1 or 2 lines) */}
         {activeField === 'credits' ? (
-          <foreignObject x="112" y={creditsBoxY} width="800" height={creditsBoxH}>
-            <input
-              ref={inputRef}
-              type="text"
+          <foreignObject
+            x={creditsBoxX}
+            y={creditsBoxY}
+            width={creditsBoxW}
+            height={creditsBoxH}
+          >
+            <textarea
+              ref={creditsTextareaRef}
               value={editText}
               placeholder="詞/曲"
-              onChange={(e) => setEditText(e.target.value)}
-              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                setEditText(e.target.value);
+                e.currentTarget.scrollTop = 0;
+              }}
+              onFocus={(e) => {
+                e.target.select();
+                e.currentTarget.scrollTop = 0;
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitEdit();
+                  if (e.shiftKey) {
+                    const lines = editText.split(/\r?\n/);
+                    if (lines.length >= 2) {
+                      e.preventDefault();
+                      return;
+                    }
+                    requestAnimationFrame(() => {
+                      if (creditsTextareaRef.current) {
+                        creditsTextareaRef.current.scrollTop = 0;
+                      }
+                    });
+                  } else {
+                    e.preventDefault();
+                    commitEdit();
+                  }
                 } else if (e.key === 'Escape') {
                   e.preventDefault();
                   cancelEdit();
                 }
               }}
               onBlur={commitEdit}
+              rows={Math.max(1, activeCreditsLayout.lines.length)}
               style={{
                 fontFamily: SvgRenderer.LYRIC_FONT,
-                fontSize: '56px',
+                fontSize: `${creditsFontSize}px`,
                 fontWeight: 'normal',
                 color: '#ffffff',
-                lineHeight: '56px',
-                height: '56px',
+                lineHeight: creditsLineHeight,
                 textAlign: 'center',
                 padding: '0',
                 margin: '0',
@@ -535,9 +581,12 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
                 outlineOffset: '4px',
                 borderRadius: '6px',
                 backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                resize: 'none',
                 width: '100%',
+                height: '100%',
                 display: 'block',
                 boxSizing: 'border-box',
+                overflow: 'hidden',
               }}
             />
           </foreignObject>
@@ -550,9 +599,9 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
             }}
           >
             <rect
-              x="162"
+              x={creditsBoxX}
               y={creditsBoxY}
-              width="700"
+              width={creditsBoxW}
               height={creditsBoxH}
               fill="transparent"
               stroke="#ffffff"
@@ -561,17 +610,20 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
               rx="6"
               className="opacity-0 group-hover:opacity-60 transition-opacity"
             />
-            <text
-              x="512"
-              y="682"
-              fill="#ffffff"
-              fontFamily={SvgRenderer.LYRIC_FONT}
-              fontSize="56"
-              fontWeight="normal"
-              textAnchor="middle"
-            >
-              {displayCredits}
-            </text>
+            {creditsLayout.lines.map((line, idx) => (
+              <text
+                key={`credits-line-${idx}`}
+                x="512"
+                y={creditsLayout.lineYCoords[idx]}
+                fill="#ffffff"
+                fontFamily={SvgRenderer.LYRIC_FONT}
+                fontSize={creditsLayout.fontSize}
+                fontWeight="normal"
+                textAnchor="middle"
+              >
+                {line}
+              </text>
+            ))}
           </g>
         )}
       </svg>
