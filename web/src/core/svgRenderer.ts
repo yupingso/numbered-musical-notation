@@ -78,6 +78,8 @@ export class SvgRenderer {
   // 4:3 Aspect Ratio standard dimensions
   static readonly SLIDE_WIDTH = 1024;
   static readonly SLIDE_HEIGHT = 768;
+  static readonly LINE1_Y = 225;
+  static readonly LINE2_Y = 545;
 
   // Font families
   static readonly MUSIC_FONT = "'Times New Roman', 'Liberation Serif', serif";
@@ -109,27 +111,35 @@ export class SvgRenderer {
 
       let dis = 2;
       let disMiddle = 9;
-      const startNode = nodes[c.start];
-      const endNode = nodes[c.end];
-      const startNote = startNode && startNode.type === NodeType.NOTE ? (startNode.value as Note) : null;
-      const endNote = endNode && endNode.type === NodeType.NOTE ? (endNode.value as Note) : null;
+      let maxOctave = 0;
+      const fromIdx = Math.max(0, c.start);
+      const toIdx = Math.min(nodes.length - 1, c.end);
+      for (let m = fromIdx; m <= toIdx; m++) {
+        const n = nodes[m];
+        if (n && n.type === NodeType.NOTE) {
+          const note = n.value as Note;
+          if (note.octave > maxOctave) {
+            maxOctave = note.octave;
+          }
+        }
+      }
 
-      if ((startNote && startNote.octave >= 1) || (endNote && endNote.octave >= 1)) {
-        dis += 2;
-        disMiddle += 2;
+      if (maxOctave >= 1) {
+        dis += 1.8 + (maxOctave - 1) * 2;
+        disMiddle += 2 * maxOctave;
       }
 
       for (let kk = 0; kk < curves.length; kk++) {
         if (kk === k || curves[kk].hidden) continue;
         const cc = curves[kk];
 
-        const cContainsCcProperly = c.start < cc.start && cc.end < c.end;
+        const cEqualsCc = c.start === cc.start && c.end === cc.end;
+        if (cEqualsCc && kk > k) continue;
+
         const cContainsCc = c.start <= cc.start && cc.end <= c.end;
 
-        if (cContainsCcProperly) {
-          dis = Math.max(dis, calcDisY(kk, visited));
-        } else if (cContainsCc) {
-          dis = Math.max(dis, calcDisY(kk, visited) + 1);
+        if (cContainsCc) {
+          dis = Math.max(dis, calcDisY(kk, visited) + 0.9);
         }
       }
 
@@ -150,6 +160,9 @@ export class SvgRenderer {
       for (let kk = 0; kk < curves.length; kk++) {
         if (kk === k || curves[kk].hidden) continue;
         const cc = curves[kk];
+
+        const cEqualsCc = c.start === cc.start && c.end === cc.end;
+        if (cEqualsCc && kk > k) continue;
 
         const ccContainsC = cc.start <= c.start && c.end <= cc.end;
         const ccContainsCProperly = cc.start < c.start && c.end < cc.end;
@@ -383,17 +396,19 @@ export class SvgRenderer {
       } else {
         const x1 = scaledNodePositions[c.start];
         const x2 = scaledNodePositions[c.end];
-        // TikZ slur / tie cubic Bézier: bend left=45, min distance=4pt, max distance=8pt (slur) / 5pt (tie)
+        // Sleek cubic Bézier (40° launch angle) keeping stacked tie+slur arcs compact
         const p0x = x1 + shiftX;
         const p3x = x2 - shiftX;
         const D_pt = Math.abs(p3x - p0x) / scale;
 
-        let d_pt = 0.3915 * D_pt;
-        const maxD_pt = c.isTie ? 5 : 8;
-        d_pt = Math.max(4, Math.min(maxD_pt, d_pt));
+        const minD_pt = c.isTie ? 3.4 : 4.0;
+        const maxD_pt = c.isTie ? 4.3 : 6.6;
+        const d_pt = Math.max(minD_pt, Math.min(maxD_pt, 0.3915 * D_pt));
 
-        const deltaX = d_pt * 0.70710678 * scale;
-        const deltaY = d_pt * 0.70710678 * ptToPx;
+        const cos40 = 0.76604444;
+        const sin40 = 0.64278761;
+        const deltaX = d_pt * cos40 * scale;
+        const deltaY = d_pt * sin40 * ptToPx;
 
         const c1x = p0x + deltaX;
         const c1y = startY - deltaY;
@@ -472,8 +487,8 @@ export class SvgRenderer {
       tagElement = `<text x="48" y="75" fill="#ffffff" font-size="57" font-weight="normal">${formattedTag}</text>`;
     }
 
-    const line1Y = 225;
-    const line2Y = 535;
+    const line1Y = SvgRenderer.LINE1_Y;
+    const line2Y = SvgRenderer.LINE2_Y;
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">

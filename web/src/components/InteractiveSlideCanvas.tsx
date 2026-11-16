@@ -242,7 +242,7 @@ export const InteractiveSlideCanvas: React.FC<InteractiveSlideCanvasProps> = ({
   const H = SvgRenderer.SLIDE_HEIGHT;
   const contentWidth = 888;
   const startX = 114;
-  const lineYCoords = [225, 535];
+  const lineYCoords = [SvgRenderer.LINE1_Y, SvgRenderer.LINE2_Y];
 
   const { innerSvgContent, lines } = useMemo(() => {
     const renderer = new SvgRenderer();

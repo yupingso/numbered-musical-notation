@@ -155,6 +155,154 @@ describe('SvgRenderer', () => {
     expect(yLarge!).toBeGreaterThan(-120);
   });
 
+  it('ensures nested slur over tie on Line 2 does not overlap Line 1 lyrics', () => {
+    const melody = `<key> C
+<time> 4/4
+
+3_2_3_5_ 5_5_6_5_
+3_2_3_1'=1'=~1'_6.
+`;
+    const lyrics = `<tag> 主歌
+一二三四五六七八
+甲乙丙丁戊~
+`;
+    const ast = parseClassicSong(melody, lyrics);
+    const slides = splitAstIntoSlides(ast.sections);
+    expect(slides).toHaveLength(1);
+
+    const slideSvg = renderer.renderSlide(slides[0]);
+    const transforms = [...slideSvg.matchAll(/transform="translate\(([\d.-]+),\s*([\d.-]+)\)"/g)];
+    expect(transforms).toHaveLength(2);
+    const line1Y = parseFloat(transforms[0][2]);
+    const line2Y = parseFloat(transforms[1][2]);
+
+    // Determine bottom of Line 1 lyric glyphs from rendered Line 1 SVG
+    const line1Render = renderer.renderLine(slides[0].line1);
+    const lyricTextMatch = line1Render.svg.match(
+      /<text x="[\d.-]+" y="([\d.-]+)"[^>]*font-size="([\d.-]+)"[^>]*>一<\/text>/
+    );
+    expect(lyricTextMatch).not.toBeNull();
+    const lyricRelY = parseFloat(lyricTextMatch![1]);
+    const lyricFontSize = parseFloat(lyricTextMatch![2]);
+    // CJK glyph descenders extend at most ~0.2 * fontSize below baseline
+    const line1LyricBottom = line1Y + lyricRelY + lyricFontSize * 0.2;
+
+    const line2Render = renderer.renderLine(slides[0].line2!);
+    const paths = [
+      ...line2Render.svg.matchAll(
+        /<path d="M ([\d.-]+) ([\d.-]+) C ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+)"[^>]*stroke-width="([\d.-]+)"/g
+      ),
+    ];
+    // Tie [4, 5] and outer slur [4, 6]
+    expect(paths).toHaveLength(2);
+
+    const tieStartY = parseFloat(paths[0][2]);
+    const tieCtrlY = parseFloat(paths[0][4]);
+    const tieStrokeW = parseFloat(paths[0][9]);
+    const tiePeakY = tieStartY + 0.75 * (tieCtrlY - tieStartY);
+
+    const slurStartY = parseFloat(paths[1][2]);
+    const slurCtrlY = parseFloat(paths[1][4]);
+    const slurStrokeW = parseFloat(paths[1][9]);
+    const slurPeakY = slurStartY + 0.75 * (slurCtrlY - slurStartY);
+
+    // Outer slur must sit cleanly above the tie without colliding
+    expect(slurStartY + slurStrokeW / 2).toBeLessThan(tieStartY - tieStrokeW / 2);
+    expect(slurPeakY + slurStrokeW / 2).toBeLessThan(tiePeakY - tieStrokeW / 2);
+
+    // Nested slur stroke top on Line 2 must not overlap Line 1 lyric text
+    const line2SlurTop = line2Y + slurPeakY - slurStrokeW / 2;
+    expect(line2SlurTop).toBeGreaterThan(line1LyricBottom);
+  });
+
+  it('raises slurs above interior high-octave notes and double-high octave dots', () => {
+    const melody = `<key> C
+<time> 4/4
+
+6_ 1'_ 6_ 5_ 1''_ 2''_ 3_ 2_
+`;
+    const lyrics = `<tag> 主歌
+一~~二~三四
+`;
+    const ast = parseClassicSong(melody, lyrics);
+    const line = ast.sections[0].lines[0];
+    const rendered = renderer.renderLine(line);
+
+    const circles = [
+      ...rendered.svg.matchAll(/<circle cx="([\d.-]+)" cy="([\d.-]+)" r="([\d.-]+)"/g),
+    ].map((m) => ({
+      cy: parseFloat(m[2]),
+      r: parseFloat(m[3]),
+    }));
+    // Octave dots sit above note cap-height (cy < -70)
+    const octaveDots = circles.filter((c) => c.cy < -70);
+    const singleOctaveDotTop = Math.max(...octaveDots.map((d) => d.cy)) - octaveDots[0].r;
+    const doubleOctaveDotTop = Math.min(...octaveDots.map((d) => d.cy)) - octaveDots[0].r;
+
+    const paths = [
+      ...rendered.svg.matchAll(
+        /<path d="M ([\d.-]+) ([\d.-]+) C ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+)"/g
+      ),
+    ];
+    expect(paths).toHaveLength(2);
+
+    // First slur spans 6_ 1'_ 6_ and must start above the interior single-octave dot
+    const interiorOctaveStartY = parseFloat(paths[0][2]);
+    expect(interiorOctaveStartY).toBeLessThan(singleOctaveDotTop);
+
+    // Second slur spans 1''_ 2''_ and must start above the second octave dot
+    const doubleOctaveStartY = parseFloat(paths[1][2]);
+    expect(doubleOctaveStartY).toBeLessThan(doubleOctaveDotTop);
+  });
+
+  it('keeps an outer melismatic slur strictly above an off-center cross-barline inner tie', () => {
+    const melody = `<key> C
+<time> 2/4
+
+6_ 5_~ | 5_ 3_ | 1_ 2_ 3_ 5_ | 6_ 5_ 3_ 2_
+`;
+    const lyrics = `<tag> 主歌
+一~~~~~~~~~~
+`;
+    const ast = parseClassicSong(melody, lyrics);
+    const line = ast.sections[0].lines[0];
+    const rendered = renderer.renderLine(line);
+
+    const paths = [
+      ...rendered.svg.matchAll(
+        /<path d="M ([\d.-]+) ([\d.-]+) C ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+)"[^>]*stroke-width="([\d.-]+)"/g
+      ),
+    ];
+    // Tie [1, 2] across first barline and outer slur [0, 12]
+    expect(paths).toHaveLength(2);
+
+    const evalBezier = (p0: number, p1: number, p2: number, p3: number, t: number) => {
+      const u = 1 - t;
+      return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+    };
+
+    const [, tx0s, ty0s, tcx1s, tcy1s, tcx2s, , tx3s, , tSwS] = paths[0];
+    const txMid = evalBezier(+tx0s, +tcx1s, +tcx2s, +tx3s, 0.5);
+    const tyPeak = evalBezier(+ty0s, +tcy1s, +tcy1s, +ty0s, 0.5);
+    const tieStrokeTop = tyPeak - +tSwS / 2;
+
+    const [, sx0s, sy0s, scx1s, scy1s, scx2s, scy2s, sx3s, sy3s, sSwS] = paths[1];
+    // Find t on outer slur corresponding to txMid
+    let lo = 0;
+    let hi = 1;
+    for (let iter = 0; iter < 30; iter++) {
+      const mid = (lo + hi) / 2;
+      if (evalBezier(+sx0s, +scx1s, +scx2s, +sx3s, mid) < txMid) lo = mid;
+      else hi = mid;
+    }
+    const tAtTieMid = (lo + hi) / 2;
+    const slurYAtTieMid = evalBezier(+sy0s, +scy1s, +scy2s, +sy3s, tAtTieMid);
+    const slurStrokeBottom = slurYAtTieMid + +sSwS / 2;
+
+    // Outer slur bottom edge must stay strictly above (more negative than) inner tie top edge
+    expect(slurStrokeBottom).toBeLessThan(tieStrokeTop);
+  });
+
   it('renders Slide 1 Title card matching template.pptx fonts and font sizes', () => {
     const titleSvg = SvgRenderer.renderTitleSlideSvg();
     expect(titleSvg).toContain('viewBox="0 0 1024 768"');
