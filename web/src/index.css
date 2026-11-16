@@ -4,8 +4,24 @@
 
 @font-face {
   font-family: 'DFKai-SB';
-  src: local('DFKai-SB'), local('BiauKai'), local('標楷體'), local('TW-Kai'), url('/fonts/kaiu.ttf') format('truetype');
+  src: url('/fonts/kaiu.ttf') format('truetype');
   font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'NMNMusic';
+  src: url('/fonts/times.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'NMNMusic';
+  src: url('/fonts/timesbd.ttf') format('truetype');
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }

@@ -5,14 +5,18 @@ import {
   arrayBufferToBase64,
   embedFontCssInSvg,
   isValidFontBinary,
+  loadEmbeddedFontCss,
   loadLyricFontCss,
   resetLyricFontCssCacheForTests,
 } from '../src/core/rasterizerWeb';
 import { parseClassicSong } from '../src/core/parserClassic';
 import { SvgRenderer, splitAstIntoSlides } from '../src/core/svgRenderer';
 
-describe('rasterizerWeb embedded lyric font', () => {
-  const kaiuPath = path.resolve(__dirname, '../../latex/fonts/kaiu.ttf');
+describe('rasterizerWeb embedded lyric and music fonts', () => {
+  const fontsDir = path.resolve(__dirname, '../../latex/fonts');
+  const kaiuPath = path.join(fontsDir, 'kaiu.ttf');
+  const timesPath = path.join(fontsDir, 'times.ttf');
+  const timesBdPath = path.join(fontsDir, 'timesbd.ttf');
 
   beforeEach(() => {
     resetLyricFontCssCacheForTests();
@@ -31,9 +35,11 @@ describe('rasterizerWeb embedded lyric font', () => {
     expect(decoded).toEqual(bytes);
   });
 
-  it('validates real kaiu.ttf binary headers and rejects HTML SPA fallback responses', () => {
-    const kaiuHeader = new Uint8Array(fs.readFileSync(kaiuPath).subarray(0, 16));
-    expect(isValidFontBinary(kaiuHeader)).toBe(true);
+  it('validates real kaiu.ttf, times.ttf, and timesbd.ttf binary headers and rejects HTML SPA fallback responses', () => {
+    for (const p of [kaiuPath, timesPath, timesBdPath]) {
+      const header = new Uint8Array(fs.readFileSync(p).subarray(0, 16));
+      expect(isValidFontBinary(header)).toBe(true);
+    }
 
     const htmlFallback = new TextEncoder().encode('<!doctype html><html></html>');
     expect(isValidFontBinary(htmlFallback)).toBe(false);
@@ -77,5 +83,31 @@ describe('rasterizerWeb embedded lyric font', () => {
     const embedded = embedFontCssInSvg(svg, css2);
     expect(embedded).toContain('<defs><style>@font-face');
     expect(embedded).toContain('lang="zh-TW"');
+  });
+
+  it('embeds DFKai-SB alongside regular and bold NMNMusic fonts and caches per font', async () => {
+    const sampleTtf = new Uint8Array([0x00, 0x01, 0x00, 0x00, 0xca, 0xfe, 0xba, 0xbe]);
+    const requestedUrls: string[] = [];
+
+    const mockFetch = (async (input: RequestInfo | URL) => {
+      requestedUrls.push(String(input));
+      return {
+        ok: true,
+        arrayBuffer: async () => sampleTtf.buffer.slice(0),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const css1 = await loadEmbeddedFontCss(mockFetch);
+    const css2 = await loadEmbeddedFontCss(mockFetch);
+    expect(requestedUrls).toEqual([
+      './fonts/kaiu.ttf',
+      './fonts/times.ttf',
+      './fonts/timesbd.ttf',
+    ]);
+    expect(css1).toContain("font-family: 'DFKai-SB'");
+    expect(css1).toContain("font-family: 'NMNMusic'");
+    expect(css1).toContain('font-weight: 400;');
+    expect(css1).toContain('font-weight: 700;');
+    expect(css2).toBe(css1);
   });
 });

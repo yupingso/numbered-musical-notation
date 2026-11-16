@@ -4,13 +4,32 @@
  * Standalone SVGs loaded via `new Image()` (`<img src="blob:...">`) run in an
  * isolated browser document that cannot access page CSS (`@font-face` in
  * `index.css` or `document.fonts`) and blocks external URL fetches. To ensure
- * Traditional Chinese lyrics render with the bundled DFKai-SB (`kaiu.ttf`) font
- * on all OSes during `.pptx` export, we fetch `./fonts/kaiu.ttf` once, encode
- * it as a `data:font/ttf;base64,...` URI, and inline `<defs><style>...</style></defs>`
- * directly into the SVG before rasterizing.
+ * Traditional Chinese lyrics (`DFKai-SB` / `kaiu.ttf`) and numbered musical
+ * notation digits/tags (`NMNMusic` / `times.ttf` + `timesbd.ttf`) render
+ * identically across all devices during `.pptx` export, we fetch the bundled
+ * TrueType fonts once, encode them as `data:font/ttf;base64,...` URIs, and
+ * inline `<defs><style>...</style></defs>` directly into the SVG before rasterizing.
  */
 
 const BASE64_CHUNK_SIZE = 0x8000;
+
+interface BundledFontSpec {
+  url: string;
+  family: string;
+  weight: string;
+}
+
+const LYRIC_FONT_SPEC: BundledFontSpec = {
+  url: './fonts/kaiu.ttf',
+  family: 'DFKai-SB',
+  weight: 'normal',
+};
+
+const EMBEDDED_FONT_SPECS: readonly BundledFontSpec[] = [
+  LYRIC_FONT_SPEC,
+  { url: './fonts/times.ttf', family: 'NMNMusic', weight: '400' },
+  { url: './fonts/timesbd.ttf', family: 'NMNMusic', weight: '700' },
+];
 
 /**
  * Encodes an ArrayBuffer into Base64 in 32 KiB chunks without overflowing the call stack.
@@ -56,38 +75,57 @@ export function embedFontCssInSvg(svgString: string, fontCss: string): string {
   );
 }
 
-let cachedLyricFontCssPromise: Promise<string> | null = null;
+const cachedFontCssPromises = new Map<string, Promise<string>>();
 
 export function resetLyricFontCssCacheForTests(): void {
-  cachedLyricFontCssPromise = null;
+  cachedFontCssPromises.clear();
+}
+
+function loadSingleFontCss(
+  spec: BundledFontSpec,
+  fetchImpl: typeof fetch | undefined
+): Promise<string> {
+  if (!fetchImpl) return Promise.resolve('');
+  let existing = cachedFontCssPromises.get(spec.url);
+  if (!existing) {
+    existing = (async () => {
+      try {
+        const res = await fetchImpl(spec.url);
+        if (!res.ok) {
+          cachedFontCssPromises.delete(spec.url);
+          return '';
+        }
+        const buf = await res.arrayBuffer();
+        if (!isValidFontBinary(new Uint8Array(buf))) {
+          cachedFontCssPromises.delete(spec.url);
+          return '';
+        }
+        const b64 = arrayBufferToBase64(buf);
+        return `@font-face { font-family: '${spec.family}'; src: url('data:font/ttf;base64,${b64}') format('truetype'); font-weight: ${spec.weight}; font-style: normal; }`;
+      } catch {
+        cachedFontCssPromises.delete(spec.url);
+        return '';
+      }
+    })();
+    cachedFontCssPromises.set(spec.url, existing);
+  }
+  return existing;
 }
 
 export function loadLyricFontCss(
   fetchImpl: typeof fetch | undefined = typeof fetch === 'function' ? fetch : undefined
 ): Promise<string> {
-  if (!fetchImpl) return Promise.resolve('');
-  if (!cachedLyricFontCssPromise) {
-    cachedLyricFontCssPromise = (async () => {
-      try {
-        const res = await fetchImpl('./fonts/kaiu.ttf');
-        if (!res.ok) {
-          cachedLyricFontCssPromise = null;
-          return '';
-        }
-        const buf = await res.arrayBuffer();
-        if (!isValidFontBinary(new Uint8Array(buf))) {
-          cachedLyricFontCssPromise = null;
-          return '';
-        }
-        const b64 = arrayBufferToBase64(buf);
-        return `@font-face { font-family: 'DFKai-SB'; src: url('data:font/ttf;base64,${b64}') format('truetype'); font-weight: normal; font-style: normal; }`;
-      } catch {
-        cachedLyricFontCssPromise = null;
-        return '';
-      }
-    })();
-  }
-  return cachedLyricFontCssPromise;
+  return loadSingleFontCss(LYRIC_FONT_SPEC, fetchImpl);
+}
+
+export async function loadEmbeddedFontCss(
+  fetchImpl: typeof fetch | undefined = typeof fetch === 'function' ? fetch : undefined
+): Promise<string> {
+  if (!fetchImpl) return '';
+  const rules = await Promise.all(
+    EMBEDDED_FONT_SPECS.map((spec) => loadSingleFontCss(spec, fetchImpl))
+  );
+  return rules.filter(Boolean).join('\n  ');
 }
 
 export async function rasterizeSvgInBrowser(
@@ -99,7 +137,7 @@ export async function rasterizeSvgInBrowser(
     await document.fonts.ready;
   }
 
-  const fontCss = await loadLyricFontCss();
+  const fontCss = await loadEmbeddedFontCss();
   const preparedSvg = embedFontCssInSvg(svgString, fontCss);
 
   return new Promise((resolve, reject) => {

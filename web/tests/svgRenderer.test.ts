@@ -555,5 +555,22 @@ describe('SvgRenderer', () => {
     expect(svg44).toContain(`font-family="${SvgRenderer.LYRIC_FONT}">主歌</tspan>`);
     expect(svg44).toContain(`font-family="${SvgRenderer.MUSIC_FONT}"> 1&gt;</tspan>`);
   });
+
+  it('locks note digits to bundled NMNMusic font and renders sharp/flat/natural as deterministic SVG paths', () => {
+    expect(SvgRenderer.MUSIC_FONT.startsWith("'NMNMusic'")).toBe(true);
+
+    // In <key> G (1# on F), #1 is sharp, $7 is flat, and %4 (F natural -> $7 in solfa; %1 -> courtesy natural)
+    const melody = `<key> C\n<time> 4/4\n| #4 $7 %1 5 |`;
+    const lyrics = `<tag> 主歌\n一二三四`;
+    const ast = parseClassicSong(melody, lyrics);
+    expect(ast.errors).toBeUndefined();
+
+    const lineSvg = renderer.renderLine(ast.sections[0].lines[0]).svg;
+    expect(lineSvg).toContain(`font-family="${SvgRenderer.MUSIC_FONT}"`);
+    expect(lineSvg).toContain('data-accidental="sharp"');
+    expect(lineSvg).toContain('data-accidental="flat"');
+    expect(lineSvg).toContain('data-accidental="natural"');
+    expect(lineSvg).not.toMatch(/[♯♭♮]/);
+  });
 });
 

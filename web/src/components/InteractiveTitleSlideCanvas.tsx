@@ -358,7 +358,7 @@ export const InteractiveTitleSlideCanvas: React.FC<InteractiveTitleSlideCanvasPr
               onBlur={commitEdit}
               rows={Math.max(1, activeTitleLayout.lines.length)}
               style={{
-                fontFamily: `${SvgRenderer.LYRIC_FONT}, KaiTi, DFKai-SB, serif, sans-serif`,
+                fontFamily: SvgRenderer.LYRIC_FONT,
                 fontSize: `${titleFontSize}px`,
                 lineHeight: titleLineHeight,
                 fontWeight: 'bold',

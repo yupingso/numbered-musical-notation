@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "copy-fonts": "node -e 'const fs=require(\"fs\"); const p=\"public/fonts\"; const src=\"../latex/fonts/kaiu.ttf\"; if(fs.existsSync(src)){fs.mkdirSync(p,{recursive:true}); fs.copyFileSync(src, p+\"/kaiu.ttf\");}'",
+    "copy-fonts": "node -e 'const fs=require(\"fs\"); const dst=\"public/fonts\"; fs.mkdirSync(dst,{recursive:true}); for(const f of [\"kaiu.ttf\",\"times.ttf\",\"timesbd.ttf\"]){ const src=\"../latex/fonts/\"+f; if(fs.existsSync(src)) fs.copyFileSync(src, dst+\"/\"+f); }'",
     "predev": "npm run copy-fonts",
     "dev": "vite",
     "prebuild": "npm run copy-fonts",

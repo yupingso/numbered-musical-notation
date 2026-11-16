@@ -81,9 +81,43 @@ export class SvgRenderer {
   static readonly LINE1_Y = 225;
   static readonly LINE2_Y = 545;
 
-  // Font families
-  static readonly MUSIC_FONT = "'Times New Roman', 'Liberation Serif', serif";
+  // Font families (locked to bundled web/embedded fonts for cross-device consistency)
+  static readonly MUSIC_FONT = "'NMNMusic', 'Times New Roman', 'Liberation Serif', serif";
   static readonly LYRIC_FONT = "'DFKai-SB', 'BiauKai', '標楷體', 'TW-Kai', serif";
+
+  /**
+   * Deterministic 1000-unit em-space vector outlines for accidentals (♯, ♭, ♮),
+   * anchored at x=0 on the right edge (matching text-anchor="end") and y=0 at baseline.
+   * Bundled times.ttf lacks U+266D (♭) and U+266E (♮), so vector paths prevent OS fallback drift.
+   */
+  private static renderAccidentalPath(
+    acc: Accidental,
+    accX: number,
+    accY: number,
+    accSize: number
+  ): string {
+    const s = (accSize / 1000).toFixed(4);
+    if (acc === Accidental.Sharp) {
+      const d =
+        'M-336,-630 H-310 V0 H-336 Z ' +
+        'M-170,-730 H-144 V-104 H-170 Z ' +
+        'M-400,-456 L-80,-606 V-538 L-400,-388 Z ' +
+        'M-400,-230 L-80,-380 V-312 L-400,-162 Z';
+      return `<path data-accidental="sharp" transform="translate(${accX}, ${accY}) scale(${s})" d="${d}" fill="#ffffff" />`;
+    }
+    if (acc === Accidental.Flat) {
+      const d =
+        'M-382,-730 H-354 V-270 C-290,-368 -195,-385 -130,-340 C-72,-300 -68,-205 -122,-130 C-178,-52 -278,-12 -382,4 Z ' +
+        'M-354,-212 V-34 C-268,-58 -192,-106 -160,-168 C-132,-222 -144,-294 -202,-310 C-254,-324 -312,-280 -354,-212 Z';
+      return `<path data-accidental="flat" transform="translate(${accX}, ${accY}) scale(${s})" d="${d}" fill="#ffffff" fill-rule="evenodd" />`;
+    }
+    const d =
+      'M-274,-730 H-248 V-174 H-274 Z ' +
+      'M-110,-578 H-84 V0 H-110 Z ' +
+      'M-274,-498 L-84,-578 V-510 L-274,-430 Z ' +
+      'M-274,-242 L-84,-322 V-254 L-274,-174 Z';
+    return `<path data-accidental="natural" transform="translate(${accX}, ${accY}) scale(${s})" d="${d}" fill="#ffffff" />`;
+  }
 
   private calcCurveDistances(curves: CurveLayout[], nodes: NodeElement[]): void {
     // Check triplet intersections (matching Python _calc_distance)
@@ -239,16 +273,12 @@ export class SvgRenderer {
           `<text x="${x}" y="0" fill="#ffffff" font-family="${SvgRenderer.MUSIC_FONT}" font-size="${noteFontSize}" font-weight="bold" text-anchor="middle">${note.name}</text>`
         );
 
-        // Accidental
+        // Accidental (deterministic vector path across all OSes/devices)
         if (note.acc !== null) {
-          const accSymbol =
-            note.acc === Accidental.Sharp ? '♯' : note.acc === Accidental.Flat ? '♭' : '♮';
           const accSize = Math.round(noteFontSize * 0.51);
           const accX = x - noteHalfWidth - Math.round(noteFontSize * 0.07);
           const accY = -Math.round(noteFontSize * 0.19);
-          elements.push(
-            `<text x="${accX}" y="${accY}" fill="#ffffff" font-family="${SvgRenderer.MUSIC_FONT}" font-size="${accSize}" text-anchor="end">${accSymbol}</text>`
-          );
+          elements.push(SvgRenderer.renderAccidentalPath(note.acc, accX, accY, accSize));
         }
 
         // Octave dots
