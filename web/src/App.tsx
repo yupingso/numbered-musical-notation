@@ -35,6 +35,13 @@ import {
   serializeNmnSource,
   syncAutoSaveFile,
 } from './core/sourceFile';
+import {
+  buildShareUrl,
+  decodeSharePayload,
+  extractShareParamFromHash,
+  resolveSharedSongTarget,
+  stripShareParamFromHash,
+} from './core/shareUrl';
 import { EXAMPLE_SONG_01 } from './examples';
 
 export const App: React.FC = () => {
@@ -81,12 +88,111 @@ export const App: React.FC = () => {
   const [songModalMode, setSongModalMode] = useState<'new' | 'fork' | null>(null);
   const [newSongTitleInput, setNewSongTitleInput] = useState('');
   const [pendingDeleteFile, setPendingDeleteFile] = useState<SavedSongFile | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareNotice, setShareNotice] = useState<{
+    tone: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  const [shareFallbackUrl, setShareFallbackUrl] = useState<string | null>(null);
+
+  const savedFilesRef = useRef<SavedSongFile[]>(savedFiles);
+  savedFilesRef.current = savedFiles;
 
   const importMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const newSongInputRef = useRef<HTMLInputElement>(null);
   const confirmDeleteBtnRef = useRef<HTMLButtonElement>(null);
+  const shareFallbackInputRef = useRef<HTMLInputElement>(null);
+  const shareCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shareNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showShareNotice = useCallback((tone: 'success' | 'error', text: string) => {
+    if (shareNoticeTimerRef.current) {
+      clearTimeout(shareNoticeTimerRef.current);
+    }
+    setShareNotice({ tone, text });
+    shareNoticeTimerRef.current = setTimeout(() => {
+      setShareNotice(null);
+      shareNoticeTimerRef.current = null;
+    }, 3200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shareCopiedTimerRef.current) clearTimeout(shareCopiedTimerRef.current);
+      if (shareNoticeTimerRef.current) clearTimeout(shareNoticeTimerRef.current);
+    };
+  }, []);
+
+  // Load shared song from URL hash (#s=v1.<payload>) on startup or hashchange, then strip #s=
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let cancelled = false;
+    let latestReqId = 0;
+
+    const cleanShareHashFromAddressBar = () => {
+      try {
+        const remainingHash = stripShareParamFromHash(window.location.hash);
+        const cleanUrl = window.location.pathname + window.location.search + remainingHash;
+        window.history.replaceState(null, '', cleanUrl || './');
+      } catch {
+        // Ignore SecurityError in restricted WebViews / file:// origins
+      }
+    };
+
+    const consumeShareHash = () => {
+      const rawParam = extractShareParamFromHash(window.location.hash);
+      if (rawParam === null) return;
+      const reqId = ++latestReqId;
+
+      decodeSharePayload(rawParam)
+        .then((payload) => {
+          if (cancelled || reqId !== latestReqId) return;
+          cleanShareHashFromAddressBar();
+          const target = resolveSharedSongTarget(savedFilesRef.current, payload);
+          setActiveFileId(target.fileId);
+          setMelodyText(target.melody);
+          setLyricsText(target.lyrics);
+          setMetadata(parseSongMetadata(target.lyrics, target.melody));
+          showShareNotice('success', '已載入分享的簡譜');
+        })
+        .catch((err: unknown) => {
+          if (cancelled || reqId !== latestReqId) return;
+          cleanShareHashFromAddressBar();
+          const msg = err instanceof Error ? err.message : '分享連結無效或已損毀';
+          showShareNotice('error', msg);
+        });
+    };
+
+    consumeShareHash();
+    window.addEventListener('hashchange', consumeShareHash);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hashchange', consumeShareHash);
+    };
+  }, [showShareNotice]);
+
+  // Focus & select URL when the fallback share URL modal opens
+  useEffect(() => {
+    if (!shareFallbackUrl) return;
+    const id = requestAnimationFrame(() => {
+      shareFallbackInputRef.current?.focus();
+      shareFallbackInputRef.current?.select();
+    });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setShareFallbackUrl(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [shareFallbackUrl]);
 
   // Focus the title input when the "新增空白簡譜" / "建立副本" modal opens
   useEffect(() => {
@@ -363,6 +469,56 @@ export const App: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(downloadUrl);
+  };
+
+  const copyTextToClipboard = async (text: string): Promise<boolean> => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall through to execCommand fallback
+      }
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleShareLink = async () => {
+    setIsImportMenuOpen(false);
+    setIsExportMenuOpen(false);
+    try {
+      const shareUrl = await buildShareUrl(melodyText, lyricsText);
+      const copied = await copyTextToClipboard(shareUrl);
+      if (copied) {
+        if (shareCopiedTimerRef.current) {
+          clearTimeout(shareCopiedTimerRef.current);
+        }
+        setShareCopied(true);
+        shareCopiedTimerRef.current = setTimeout(() => {
+          setShareCopied(false);
+          shareCopiedTimerRef.current = null;
+        }, 800);
+      } else {
+        setShareFallbackUrl(shareUrl);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '無法產生分享連結';
+      showShareNotice('error', msg);
+    }
   };
 
   const handleSubmitSongModal = (e?: React.FormEvent) => {
@@ -877,119 +1033,156 @@ export const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right: Export Dropdown */}
-        <div ref={exportMenuRef} className="relative flex items-center gap-2 shrink-0">
+        {/* Right: Share Button & Export Dropdown */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              setIsExportMenuOpen((prev) => !prev);
-              setIsImportMenuOpen(false);
-            }}
-            disabled={isExporting}
-            aria-haspopup="menu"
-            aria-expanded={isExportMenuOpen}
-            className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-sm rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
-            title="匯出簡報 (.pptx) 或原始檔 (.nmn)"
+            onClick={handleShareLink}
+            disabled={!canExportSource}
+            className={`px-3 py-1.5 text-sm font-semibold rounded-md border transition flex items-center gap-1.5 shrink-0 select-none shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              shareCopied
+                ? 'bg-emerald-700/90 hover:bg-emerald-600 text-white border-emerald-400'
+                : 'bg-slate-700/90 hover:bg-slate-600 active:bg-slate-500 text-white border-slate-500'
+            }`}
+            title="複製包含目前旋律與歌詞的分享連結"
           >
-            {isExporting ? (
+            {shareCopied ? (
               <>
-                <span className="animate-spin text-sm">⏳</span>
-                <span>匯出中...</span>
+                <span className="text-emerald-200 font-bold leading-none">✓</span>
+                <span>已複製連結</span>
               </>
             ) : (
               <>
-                <span>匯出</span>
                 <svg
-                  className={`w-4 h-4 text-sky-100 transition-transform duration-150 ${
-                    isExportMenuOpen ? 'rotate-180' : ''
-                  }`}
+                  className="w-4 h-4 text-slate-200 shrink-0"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.4"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <polyline points="6 9 12 15 18 9" />
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
+                <span>分享</span>
               </>
             )}
           </button>
 
-          {isExportMenuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1.5 w-72 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-2 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
+          <div ref={exportMenuRef} className="relative flex items-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsExportMenuOpen((prev) => !prev);
+                setIsImportMenuOpen(false);
+              }}
+              disabled={isExporting}
+              aria-haspopup="menu"
+              aria-expanded={isExportMenuOpen}
+              className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-bold text-sm rounded-md shadow-md hover:shadow-sky-500/20 border border-sky-300/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:border-slate-600 disabled:text-slate-400 transition flex items-center gap-1.5 shrink-0 select-none cursor-pointer"
+              title="匯出簡報 (.pptx) 或原始檔 (.nmn)"
             >
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!canExportPptx}
-                onClick={() => {
-                  setIsExportMenuOpen(false);
-                  handleDownloadPptx();
-                }}
-                className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
-              >
-                <svg
-                  className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                  <line x1="8" y1="21" x2="16" y2="21" />
-                  <line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-bold text-white">匯出簡報 (.pptx)</span>
-                  <span className="text-xs text-slate-300">
-                    {!canExportPptx
-                      ? !(alignmentStatus?.valid ?? true)
-                        ? `需先修正錯誤：${alignmentStatus?.message}`
-                        : '無可匯出的投影片'
-                      : '下載 4:3 PowerPoint 投影片'}
-                  </span>
-                </div>
-              </button>
+              {isExporting ? (
+                <>
+                  <span className="animate-spin text-sm">⏳</span>
+                  <span>匯出中...</span>
+                </>
+              ) : (
+                <>
+                  <span>匯出</span>
+                  <svg
+                    className={`w-4 h-4 text-sky-100 transition-transform duration-150 ${
+                      isExportMenuOpen ? 'rotate-180' : ''
+                    }`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </>
+              )}
+            </button>
 
-              <div className="my-1.5 border-t border-slate-800" />
-
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!canExportSource}
-                onClick={() => {
-                  setIsExportMenuOpen(false);
-                  handleDownloadSource();
-                }}
-                className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
+            {isExportMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1.5 w-72 bg-slate-900 border border-slate-600/90 rounded-xl shadow-2xl py-2 z-50 flex flex-col select-none animate-in fade-in zoom-in-95 duration-100"
               >
-                <svg
-                  className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!canExportPptx}
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    handleDownloadPptx();
+                  }}
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
                 >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-bold text-white">匯出原始檔 (.nmn)</span>
-                  <span className="text-xs text-slate-300">
-                    下載旋律與歌詞，供日後匯入編輯
-                  </span>
-                </div>
-              </button>
-            </div>
-          )}
+                  <svg
+                    className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">匯出簡報 (.pptx)</span>
+                    <span className="text-xs text-slate-300">
+                      {!canExportPptx
+                        ? !(alignmentStatus?.valid ?? true)
+                          ? `需先修正錯誤：${alignmentStatus?.message}`
+                          : '無可匯出的投影片'
+                        : '下載 4:3 PowerPoint 投影片'}
+                    </span>
+                  </div>
+                </button>
+
+                <div className="my-1.5 border-t border-slate-800" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!canExportSource}
+                  onClick={() => {
+                    setIsExportMenuOpen(false);
+                    handleDownloadSource();
+                  }}
+                  className="px-4 py-2.5 text-left hover:bg-slate-800 active:bg-slate-700 disabled:opacity-45 disabled:hover:bg-transparent disabled:cursor-not-allowed transition flex items-start gap-3 cursor-pointer"
+                >
+                  <svg
+                    className="w-4 h-4 text-slate-200 mt-0.5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-white">匯出原始檔 (.nmn)</span>
+                    <span className="text-xs text-slate-300">
+                      下載旋律與歌詞，供日後匯入編輯
+                    </span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1237,6 +1430,85 @@ export const App: React.FC = () => {
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Share Link Manual Copy Fallback Modal (when Clipboard API is unavailable) */}
+      {shareFallbackUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setShareFallbackUrl(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-fallback-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-sky-500/70 rounded-2xl shadow-2xl max-w-lg w-full p-5 relative flex flex-col space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div
+                id="share-fallback-modal-title"
+                className="flex items-center gap-2 text-white font-bold text-base"
+              >
+                <span>複製分享連結</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareFallbackUrl(null)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition text-base cursor-pointer"
+                title="關閉"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-300">
+              瀏覽器未允許自動存取剪貼簿，請手動複製以下連結：
+            </p>
+
+            <input
+              ref={shareFallbackInputRef}
+              type="text"
+              readOnly
+              value={shareFallbackUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-lg text-xs font-mono text-slate-100 focus:outline-none"
+            />
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShareFallbackUrl(null)}
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white text-sm font-bold rounded-lg shadow-md border border-sky-400/50 transition cursor-pointer"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking Share Toast Notice */}
+      {shareNotice && (
+        <div
+          role={shareNotice.tone === 'error' ? 'alert' : 'status'}
+          className={`fixed bottom-5 right-5 z-50 max-w-md px-4 py-2.5 rounded-xl shadow-2xl border text-sm font-semibold flex items-center gap-2.5 animate-in fade-in duration-150 ${
+            shareNotice.tone === 'error'
+              ? 'bg-rose-950/95 border-rose-500/80 text-rose-100'
+              : 'bg-emerald-950/95 border-emerald-500/80 text-emerald-100'
+          }`}
+        >
+          <span>{shareNotice.tone === 'error' ? '⚠️' : '✓'}</span>
+          <span className="break-words">{shareNotice.text}</span>
+          <button
+            type="button"
+            onClick={() => setShareNotice(null)}
+            className="ml-1 text-slate-300 hover:text-white transition cursor-pointer"
+            aria-label="關閉通知"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
